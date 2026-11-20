@@ -1,4 +1,4 @@
-"""Zero-dependency HTTP server serving the 3D WebGL2 game and simulation API."""
+"""Zero-dependency HTTP server serving the 3D WebGL2 game and 3-Night campaign API."""
 
 from __future__ import annotations
 
@@ -11,8 +11,8 @@ import threading
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from dao_den_long.core.config import TICK_RATE, load_tuning
-from dao_den_long.core.engine import InputFrame, Night1Simulation
+from dao_den_long.core.config import load_tuning
+from dao_den_long.core.engine import GameSimulation, InputFrame
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -25,23 +25,41 @@ CONTENT_TYPES = {
 
 
 class SimulationSession:
-    """Thread-safe live Night 1 session driving the 3D browser client."""
+    """Thread-safe 3-Night campaign session driving the 3D browser client."""
 
-    def __init__(self, seed: int = 42) -> None:
+    def __init__(self, seed: int = 42, night: int = 1) -> None:
         self._lock = threading.Lock()
         self._seed = seed
+        self._night = night
+        self._campaign_score = 0
+        self._night_banked = False
         self._tuning = load_tuning()
-        self._sim = Night1Simulation(seed=self._seed, tuning=self._tuning)
+        self._sim = GameSimulation(seed=self._seed, night=self._night, tuning=self._tuning)
 
     def _payload(self, events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        snap = self._sim.snapshot()
         return {
-            "snapshot": self._sim.snapshot(),
+            "snapshot": snap,
             "tuning": asdict(self._tuning),
-            "cooldowns": {
-                "pulse_s": round(self._sim.player.pulse_cooldown_ticks / TICK_RATE, 3),
-                "invuln_s": round(self._sim.player.invuln_ticks / TICK_RATE, 3),
+            "meta": {
+                "map_name": self._sim.map_def.name,
+                "intro_quote": self._sim.map_def.intro_quote,
+                "campaign_score": self._campaign_score + (snap["score"] if self._sim.state == "won" and not self._night_banked else 0),
+                "wind_warning": self._sim.wind_warning,
+                "facing_yaw_deg": round(self._sim.player.facing_yaw_deg, 2),
+                "ramps": [
+                    {"angle_deg": r.angle_deg, "inner_r": r.inner_r, "outer_r": r.outer_r, "half_width": r.half_width, "top_y": r.top_y}
+                    for r in self._sim.map_def.ramps
+                ],
+                "launch_pads": [
+                    {"x": p.x, "y": p.y, "z": p.z, "radius": p.radius}
+                    for p in self._sim.map_def.launch_pads
+                ],
+                "charms_pos": [
+                    {"id": c.id, "pos": [c.x, c.y, c.z], "available": c.available}
+                    for c in self._sim.charms
+                ],
             },
-            "facing_yaw_deg": round(self._sim.player.facing_yaw_deg, 2),
             "events": events or [],
         }
 
@@ -55,8 +73,10 @@ class SimulationSession:
         mz = max(-1.0, min(1.0, float(raw_move[1]))) if isinstance(raw_move, (list, tuple)) and len(raw_move) == 2 else 0.0
         cam_yaw = float(body.get("cam_yaw_deg", 0.0))
         jump = bool(body.get("jump", False))
+        dash = bool(body.get("dash", False))
         interact = bool(body.get("interact", False))
         pulse = bool(body.get("pulse", False))
+        pause = bool(body.get("pause", False))
         raw_steps = body.get("steps", 1)
         steps = max(1, min(4, int(raw_steps) if isinstance(raw_steps, (int, float)) else 1))
 
@@ -64,23 +84,53 @@ class SimulationSession:
             move=(mx, mz),
             cam_yaw_deg=cam_yaw,
             jump=jump,
+            dash=dash,
             interact=interact,
             pulse=pulse,
+            pause=pause,
         )
         all_events: list[dict[str, Any]] = []
         with self._lock:
-            for _ in range(steps):
-                if self._sim.state != "playing":
+            for i in range(steps):
+                if self._sim.state in ("won", "lost"):
                     break
-                all_events.extend(self._sim.step(inp))
+                # Edge inputs only on step 0 of multi-step frame batch
+                step_inp = inp if i == 0 else InputFrame(
+                    move=inp.move,
+                    cam_yaw_deg=inp.cam_yaw_deg,
+                    jump=inp.jump,
+                    dash=inp.dash,
+                    interact=inp.interact,
+                    pulse=inp.pulse,
+                    pause=False,
+                )
+                all_events.extend(self._sim.step(step_inp))
+                if self._sim.state == "paused":
+                    break
             return self._payload(all_events)
 
-    def reset(self, seed: int | None = None) -> dict[str, Any]:
+    def reset(self, *, night: int | None = None, seed: int | None = None, reset_campaign: bool = False) -> dict[str, Any]:
         with self._lock:
+            if reset_campaign:
+                self._campaign_score = 0
+            if night in (1, 2, 3):
+                self._night = int(night)
             if seed is not None:
                 self._seed = int(seed)
+            self._night_banked = False
             self._tuning = load_tuning()
-            self._sim = Night1Simulation(seed=self._seed, tuning=self._tuning)
+            self._sim = GameSimulation(seed=self._seed, night=self._night, tuning=self._tuning)
+            return self._payload([])
+
+    def next_night(self) -> dict[str, Any]:
+        with self._lock:
+            if self._sim.state == "won" and not self._night_banked:
+                self._campaign_score += self._sim.score
+                self._night_banked = True
+            self._night = min(3, self._night + 1)
+            self._night_banked = False
+            self._tuning = load_tuning()
+            self._sim = GameSimulation(seed=self._seed + self._night - 1, night=self._night, tuning=self._tuning)
             return self._payload([])
 
 
@@ -102,18 +152,15 @@ def dispatch_request(
         if route == "/health":
             return _json_response(
                 HTTPStatus.OK,
-                {"status": "ok", "phase": "phase-1", "contract_version": "1.0"},
+                {"status": "ok", "phase": "phase-2", "contract_version": "1.1"},
             )
-
         if route == "/api/state":
             return _json_response(HTTPStatus.OK, session.state())
-
         if route == "/":
             index_file = STATIC_DIR / "index.html"
             if index_file.is_file():
                 return HTTPStatus.OK, CONTENT_TYPES[".html"], index_file.read_bytes()
             return _json_response(HTTPStatus.NOT_FOUND, {"error": "index.html missing"})
-
         if route.startswith("/static/"):
             rel = unquote(route[len("/static/"):]).lstrip("/")
             static_root = STATIC_DIR.resolve()
@@ -122,7 +169,6 @@ def dispatch_request(
                 return _json_response(HTTPStatus.NOT_FOUND, {"error": "asset not found"})
             content_type = CONTENT_TYPES.get(target.suffix.lower(), "application/octet-stream")
             return HTTPStatus.OK, content_type, target.read_bytes()
-
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     if method == "POST":
@@ -139,9 +185,14 @@ def dispatch_request(
         if route == "/api/tick":
             return _json_response(HTTPStatus.OK, session.step_ticks(parsed_body))
         if route == "/api/reset":
+            raw_night = parsed_body.get("night")
             raw_seed = parsed_body.get("seed")
-            new_seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
-            return _json_response(HTTPStatus.OK, session.reset(seed=new_seed))
+            night = int(raw_night) if isinstance(raw_night, int) and not isinstance(raw_night, bool) and raw_night in (1, 2, 3) else None
+            seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
+            reset_campaign = bool(parsed_body.get("reset_campaign", False))
+            return _json_response(HTTPStatus.OK, session.reset(night=night, seed=seed, reset_campaign=reset_campaign))
+        if route == "/api/next_night":
+            return _json_response(HTTPStatus.OK, session.next_night())
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
@@ -202,14 +253,12 @@ def create_server(
     seed: int = 42,
     quiet: bool = False,
 ) -> tuple[ThreadingHTTPServer, int]:
-    """Create and bind the HTTP server, returning (server, actual_port)."""
     session = SimulationSession(seed=seed)
     server = _LanternHTTPServer((host, port), _LanternRequestHandler, session, quiet)
     return server, int(server.server_address[1])
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000, *, seed: int = 42) -> None:
-    """Start blocking HTTP server until interrupted."""
     server, actual_port = create_server(host=host, port=port, seed=seed, quiet=False)
     print(f"Dao Den Long 3D running at http://{host}:{actual_port} (Ctrl+C to stop)")
     try:

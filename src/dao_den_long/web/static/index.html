@@ -3,68 +3,134 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Đảo Đèn Lồng — Đêm 1: Đảo Bến</title>
+  <title>Đảo Đèn Lồng — Ba Hòn Đảo</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <canvas id="scene-canvas" aria-label="Cảnh 3D Đảo Đèn Lồng"></canvas>
 
-  <header class="hud-top">
-    <div class="stat-pill">
-      <span class="label">Ngọn lửa (Máu)</span>
-      <strong id="hud-flames" class="flames">3 / 3</strong>
+  <!-- HUD -->
+  <header id="hud-root" class="hidden">
+    <div class="hud-top-left hud-box">
+      <span class="label">Ngọn Lửa</span>
+      <strong id="hud-flames" class="flames">🔥🔥🔥 3/3</strong>
     </div>
-    <div class="stat-pill">
-      <span class="label">Đom đóm đang giữ</span>
-      <strong id="hud-carried">0 / 6</strong>
+
+    <div class="hud-top-center hud-box">
+      <span id="hud-night-label" class="label">Đêm 1 — Đảo Bến</span>
+      <strong id="hud-timer" class="timer">05:00</strong>
+      <span id="hud-wind-badge" class="wind-badge hidden">Gió sắp thổi!</span>
     </div>
-    <div class="stat-pill">
-      <span class="label">Đèn Lồng Lớn</span>
-      <strong id="hud-lanterns">0 / 5</strong>
+
+    <div class="hud-top-right hud-box">
+      <div class="row">
+        <span class="label">Đèn</span>
+        <strong id="hud-lanterns">0 / 5</strong>
+      </div>
+      <div class="row">
+        <span class="label">Điểm</span>
+        <strong id="hud-score" class="gold">0</strong>
+      </div>
+      <div class="row small">
+        <span id="hud-fps">FPS: 60</span>
+        <button id="btn-pause-hud" type="button" class="mini-btn">II (Esc)</button>
+      </div>
     </div>
-    <div class="stat-pill">
-      <span class="label">Thời gian</span>
-      <strong id="hud-time">05:00</strong>
+
+    <div class="hud-bottom-center">
+      <div id="hud-mote-slots" class="mote-slots" aria-label="Thanh đom đóm 10 ô"></div>
+      <div id="hud-mote-text" class="mote-text">Đom đóm: 0 / 10</div>
     </div>
-    <div class="stat-pill">
-      <span class="label">Điểm số</span>
-      <strong id="hud-score">0</strong>
-    </div>
-    <div class="stat-pill">
-      <span class="label">Tỏa sáng (Q/Shift)</span>
-      <strong id="hud-pulse">Sẵn sàng</strong>
+
+    <div class="hud-bottom-right">
+      <div id="hud-charm" class="skill-pill charm hidden">Bùa Gió: 10.0s</div>
+      <div class="skill-pill">
+        <span class="k">Shift</span> Lướt: <strong id="hud-dash">Sẵn sàng</strong>
+      </div>
+      <div class="skill-pill">
+        <span class="k">Q</span> Tỏa Sáng (3): <strong id="hud-pulse">Sẵn sàng</strong>
+      </div>
     </div>
   </header>
 
-  <aside class="hud-controls">
-    <div class="badge">Đêm 1 · Đảo Bến · Contract v1.0</div>
-    <p id="hud-hint" class="hint">Thu thập đom đóm vàng cam, né Bóng Mực tím đen và thắp sáng đủ 5 Đèn Lồng Lớn!</p>
-    <ul class="keys">
-      <li><kbd>WASD</kbd> Di chuyển</li>
-      <li><kbd>Space</kbd> Nhảy</li>
-      <li><kbd>E</kbd> / <kbd>F</kbd> Nạp ánh sáng vào đèn</li>
-      <li><kbd>Q</kbd> / <kbd>Shift</kbd> Tỏa sáng xua Bóng Mực (-2)</li>
-      <li><kbd>Kéo chuột</kbd> / <kbd>← →</kbd> Xoay camera</li>
-      <li><kbd>R</kbd> Chơi lại · <kbd>M</kbd> Âm thanh</li>
-    </ul>
-    <div class="actions">
-      <button id="btn-audio" type="button" class="secondary">Âm thanh: Bật (M)</button>
-      <button id="btn-reset" type="button">Chơi lại (R)</button>
-    </div>
-  </aside>
+  <div id="context-prompt" class="prompt hidden">E — Nạp ánh sáng (0/10)</div>
+  <div id="offscreen-arrow" class="offscreen-arrow hidden" aria-hidden="true">▲</div>
 
-  <div id="context-prompt" class="prompt hidden" aria-live="polite"></div>
-
-  <div id="gameover-overlay" class="overlay hidden" role="dialog" aria-modal="true">
-    <div class="overlay-card">
-      <div id="overlay-badge" class="badge">Kết thúc</div>
-      <h2 id="overlay-title">Đêm 1 kết thúc</h2>
-      <p id="overlay-reason" class="overlay-desc"></p>
-      <div class="overlay-score">
-        <span>Tổng điểm</span>
-        <strong id="overlay-score">0</strong>
+  <!-- Main Menu -->
+  <div id="screen-menu" class="overlay">
+    <div class="overlay-card wide">
+      <div class="badge">Day 12 AI SDLC · Phase 2</div>
+      <h1>Đảo Đèn Lồng</h1>
+      <p class="overlay-desc">Hành trình qua ba hòn đảo giữa biển mây: Đảo Bến, Đảo Cau và Đảo Chuông.</p>
+      <div class="btn-col">
+        <button id="btn-start-campaign" type="button">Bắt đầu từ Đêm 1</button>
+        <div class="btn-row">
+          <button id="btn-play-n1" type="button" class="secondary">Đêm 1</button>
+          <button id="btn-play-n2" type="button" class="secondary">Đêm 2</button>
+          <button id="btn-play-n3" type="button" class="secondary">Đêm 3</button>
+        </div>
+        <button id="btn-open-settings-menu" type="button" class="secondary">Cài đặt</button>
       </div>
-      <button id="btn-replay" type="button">Chơi lại Đêm 1</button>
+      <p class="controls-mini">WASD: Di chuyển · Space: Nhảy · Shift/Chuột phải: Lướt · E: Nạp đèn · Q: Tỏa Sáng · P/Esc: Tạm dừng</p>
+    </div>
+  </div>
+
+  <!-- Night Intro -->
+  <div id="screen-intro" class="overlay hidden">
+    <div class="overlay-card wide">
+      <div id="intro-night-badge" class="badge">Đêm 1</div>
+      <h2 id="intro-title">Đảo Bến</h2>
+      <p id="intro-quote" class="quote"></p>
+      <button id="btn-enter-night" type="button">Thắp đèn lên đường</button>
+    </div>
+  </div>
+
+  <!-- Pause Menu -->
+  <div id="screen-pause" class="overlay hidden">
+    <div class="overlay-card">
+      <div class="badge">Tạm dừng</div>
+      <h2>Nghỉ chân</h2>
+      <div class="btn-col">
+        <button id="btn-resume" type="button">Tiếp tục</button>
+        <button id="btn-restart-night-pause" type="button" class="secondary">Chơi lại Đêm</button>
+        <button id="btn-open-settings-pause" type="button" class="secondary">Cài đặt</button>
+        <button id="btn-back-menu-pause" type="button" class="secondary">Về Menu chính</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="screen-settings" class="overlay hidden">
+    <div class="overlay-card">
+      <div class="badge">Cài đặt</div>
+      <h2>Âm thanh & Điều khiển</h2>
+      <label class="setting-row">
+        <span>Âm lượng: <strong id="lbl-volume">70%</strong></span>
+        <input id="input-volume" type="range" min="0" max="100" value="70">
+      </label>
+      <label class="setting-row">
+        <span>Độ nhạy chuột: <strong id="lbl-sens">1.0x</strong></span>
+        <input id="input-sens" type="range" min="2" max="25" value="10">
+      </label>
+      <button id="btn-close-settings" type="button">Lưu & Quay lại</button>
+    </div>
+  </div>
+
+  <!-- Night Result / Dawn Victory -->
+  <div id="screen-result" class="overlay hidden">
+    <div class="overlay-card wide">
+      <div id="result-badge" class="badge">Kết thúc Đêm</div>
+      <h2 id="result-title">Hoàn thành</h2>
+      <p id="result-desc" class="overlay-desc"></p>
+      <div class="overlay-score">
+        <span>Điểm Đêm này / Tổng chiến dịch</span>
+        <strong id="result-score">0</strong>
+      </div>
+      <div class="btn-row">
+        <button id="btn-next-night" type="button">Đêm kế tiếp</button>
+        <button id="btn-retry-night" type="button" class="secondary">Chơi lại Đêm</button>
+        <button id="btn-result-menu" type="button" class="secondary">Về Menu</button>
+      </div>
     </div>
   </div>
 
