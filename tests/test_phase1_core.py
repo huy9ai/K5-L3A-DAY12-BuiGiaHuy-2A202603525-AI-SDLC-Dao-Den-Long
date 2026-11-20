@@ -1,4 +1,4 @@
-"""Unit tests for Phase 1 core simulation mechanics and Test Contract tuning sync."""
+"""Unit tests for Phase 1 regression + standardized Contract v1.1 core mechanics."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ class TestPhase1Core(unittest.TestCase):
     def test_tuning_matches_contract_json(self) -> None:
         raw = load_contract_data()
         tuning = load_tuning()
-        self.assertEqual(raw["contract_version"], "1.0")
+        self.assertEqual(raw["contract_version"], "1.1")
         self.assertEqual(tuning.lantern_count_night1, 5)
         self.assertEqual(asdict(tuning), raw["tuning"])
 
@@ -34,7 +34,6 @@ class TestPhase1Core(unittest.TestCase):
             seed=1,
             scenario={"random_motes": False, "random_shades": False},
         )
-        # Diagonal input (1, 1) must normalize to unit length -> distance == player_speed * 1.0s
         for _ in range(60):
             sim.step(InputFrame(move=(1.0, 1.0), cam_yaw_deg=0.0))
         snap = sim.snapshot()
@@ -42,7 +41,6 @@ class TestPhase1Core(unittest.TestCase):
         self.assertAlmostEqual(dist, sim.tuning.player_speed, places=2)
         self.assertAlmostEqual(snap["player"]["pos"][0], snap["player"]["pos"][2], places=2)
 
-        # cam_yaw_deg = 90 with move = [0, 1] -> x' = sin(90) = 1, z' = cos(90) = 0 (+X direction)
         sim_rot = Night1Simulation(
             seed=1,
             scenario={"random_motes": False, "random_shades": False},
@@ -84,29 +82,34 @@ class TestPhase1Core(unittest.TestCase):
         self.assertEqual(len(picked_events), tuning.carry_capacity)
         self.assertEqual(sim.player.carried, tuning.carry_capacity)
         self.assertEqual(len(sim.motes), 2)
+        # Ticket-02: pickup gives 0 score; deposit gives +10 per mote
+        self.assertEqual(sim.score, 0)
 
-        # Hold interact across 2 ticks -> deposits only once (rising edge)
         ev1 = sim.step(InputFrame(interact=True))
         self.assertTrue(any(e["name"] == "deposit" for e in ev1))
         self.assertTrue(any(e["name"] == "lantern_lit" for e in ev1))
         self.assertTrue(sim.lanterns[0].lit)
         self.assertEqual(sim.player.carried, tuning.carry_capacity - tuning.lantern_cost)
+        self.assertEqual(
+            sim.score,
+            tuning.lantern_cost * tuning.score.per_mote + tuning.score.per_lantern,
+        )
 
-        # Next tick while still holding interact: no second deposit; leftover 2 motes at origin get picked up
+        # Hold interact across next tick: no second deposit; remaining 2 motes get picked up
         ev2 = sim.step(InputFrame(interact=True))
         self.assertFalse(any(e["name"] == "deposit" for e in ev2))
         self.assertEqual(sim.player.carried, tuning.carry_capacity - tuning.lantern_cost + 2)
 
-    def test_pulse_stuns_pushes_and_enforces_cooldown(self) -> None:
+    def test_pulse_3d_distance_15_tick_push_and_cooldown(self) -> None:
         tuning = load_tuning()
         sim = Night1Simulation(
             seed=7,
             tuning=tuning,
             scenario={
-                "player": {"pos": [0, 0, 0], "carried": 5, "flames": 3},
+                "player": {"pos": [0, 0, 0], "carried": 6, "flames": 3},
                 "random_motes": False,
                 "random_shades": False,
-                "shades": [{"id": "S1", "pos": [0, 1, 4.0]}],
+                "shades": [{"id": "S1", "pos": [0, 0, 4.0], "state": "chase"}],
             },
         )
         ev1 = sim.step(InputFrame(pulse=True))
@@ -114,11 +117,14 @@ class TestPhase1Core(unittest.TestCase):
         self.assertEqual(len(pulse_evs), 1)
         self.assertEqual(pulse_evs[0]["data"]["stunned_ids"], ["S1"])
         self.assertEqual(sim.shades[0].state, "stunned")
-        self.assertGreaterEqual(sim.shades[0].z, 4.0 + tuning.pulse_push_m - 0.01)
-        self.assertEqual(sim.player.carried, 5 - tuning.pulse_cost)
+        self.assertEqual(sim.player.carried, 6 - tuning.pulse_cost)
 
-        # Immediately release and press pulse again during cooldown -> should NOT fire
-        sim.step(InputFrame(pulse=False))
+        # Over 15 ticks, shade is pushed ~4m outward
+        for _ in range(16):
+            sim.step(InputFrame(pulse=False))
+        self.assertGreaterEqual(sim.shades[0].z, 4.0 + tuning.pulse_push_m - 0.3)
+
+        # Pressing pulse again during 3s cooldown does not fire
         ev_cd = sim.step(InputFrame(pulse=True))
         self.assertFalse(any(e["name"] == "pulse" for e in ev_cd))
 

@@ -1,0 +1,14 @@
+{
+  "player": { "pos": [34.0, 0, 0], "carried": 6, "flames": 3 },
+  "random_motes": false,
+  "random_shades": false,
+  "random_drifters": false,
+  "motes": [],
+  "shades": [],
+  "drifters": [
+    { "id": "D1", "pos": [35.0, 1.0, 4.0], "state": "idle" }
+  ],
+  "charms": [
+    { "id": "C1", "pos": [35.0, 0, 0], "available": true }
+  ]
+}

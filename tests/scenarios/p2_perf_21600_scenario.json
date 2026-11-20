@@ -1,0 +1,8 @@
+{
+  "player": { "pos": [0, 0, -15], "carried": 0, "flames": 3, "invuln_ticks": 25000 },
+  "random_motes": true,
+  "random_shades": true,
+  "random_drifters": true,
+  "wind_enabled": true,
+  "time_left_s": 360.0
+}

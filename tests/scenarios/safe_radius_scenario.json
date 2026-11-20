@@ -4,10 +4,10 @@
   "random_shades": false,
   "motes": [],
   "shades": [
-    { "id": "S1", "pos": [0, 1, 8] }
+    { "id": "S1", "pos": [0, 0, 8], "state": "chase" }
   ],
   "lanterns": [
-    { "id": "L1", "pos": [0, 0, 0], "lit": true, "deposited": 4 }
+    { "id": "L1", "pos": [0, 0, 0], "lit": true, "deposited": 10 }
   ],
   "time_left_s": 300
 }
