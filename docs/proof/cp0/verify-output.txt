@@ -1,0 +1,29 @@
+=== DAO DEN LONG VERIFICATION REPORT ===
+Timestamp (UTC): 2026-11-20T08:13:59Z
+Mode: standard
+Phase: cp0
+Git HEAD: 4cb28ee
+Python: 3.14.10 (C:\Users\nhoch\AppData\Local\Programs\Python\Python314\python.exe)
+Platform: Windows-11-10.0.26300-SP0
+
+--- [PASS] Unit & Smoke Tests (unittest) ---
+test_core_determinism (test_cp0_smoke.TestCP0Smoke.test_core_determinism) ... ok
+test_headless_cli_deterministic_json (test_cp0_smoke.TestCP0Smoke.test_headless_cli_deterministic_json) ... ok
+test_web_router_health_api_and_static (test_cp0_smoke.TestCP0Smoke.test_web_router_health_api_and_static) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.401s
+
+OK
+
+--- [PASS] Headless Determinism (SHA-256 x2) ---
+Command: C:\Users\nhoch\AppData\Local\Programs\Python\Python314\python.exe run.py headless --seed 42 --ticks 30
+Run 1 SHA-256: 9868f6623ba3b610b49be2adbb423981b13e4d4cf88defd29d9f19bcf0f97ca9
+Run 2 SHA-256: 9868f6623ba3b610b49be2adbb423981b13e4d4cf88defd29d9f19bcf0f97ca9
+Byte-identical: True
+Sample snapshot keys: ['elapsed', 'fireflies', 'lantern', 'phase', 'seed', 'tick'], tick=30
+
+--- [PASS] Secret & Hygiene Scan ---
+Scanned 40 text files; 0 env files or secret key patterns found.
+
+OVERALL RESULT: PASS
