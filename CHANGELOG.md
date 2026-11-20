@@ -1,21 +1,21 @@
 # Changelog
 
+## [0.2.0] - Phase 2 (TICKET-02: Ba hòn đảo & Test Contract v1.1)
+### Added
+- Standardized all physics, timings, capacities, radii, and scoring in `game.contract.json` (`contract_version: "1.1"`) and `core/config.py`.
+- Added standardized maps (`src/dao_den_long/core/maps.py`) for Night 1 (Đảo Bến, r=40m), Night 2 (Đảo Cau twin islands + bamboo bridge + 2 launch pads), and Night 3 (Đảo Chuông 3 tiers + 2 ramps + jump pad + bell tower + wind gusts).
+- Added Dash (ground + constant-Y air dash), Fall & 60-tick respawn (`Y < -10m`), 5-state Shade AI (`spawning`, `wander`, `chase`, `recoil`, `stunned`), smooth <=30-tick safe-radius pushout, dropped motes with 480-tick TTL, Gió Lạc (Drifters) steal/drop AI, Bùa Gió (Charms), Pause (`tick` vs `sim_tick`), and Night 3 periodic wind.
+- Upgraded headless CLI & validator (`headless/runner.py`, `validation.py`) to Test Contract v1.1 supporting `--night 1|2|3`, `dash`, `pause`, `drifters`, `charms`, and full-night <= 30s benchmark verification.
+- Upgraded 3D WebGL2 client (`web/static/`) with full 3-Night Campaign UI (Menu, Intro with Ông Đăng quote, Result, Dawn Victory), Pause modal, persistent Settings (`localStorage`), full HUD + 10-slot mote bar + off-screen unlit-lantern directional arrow, standardized hex palette + ambient formula, and 11 procedural SFX + night ambience.
+- Added Phase 2 headless scenarios & tests (`tests/test_phase2_features.py`) and updated regression tests + `scripts/verify.py`.
+
+### Fixed
+- Fixed upside-down viewport & reversed `A`/`D` camera orientation in `src/dao_den_long/web/static/app.js` (`mat4LookAt` right-handed cross product `x_cam = (zz, 0, -zx)`).
+
 ## [0.1.0] - Phase 1 (PRD-0 + Test Contract v1.0)
 ### Added
-- `game.contract.json` (`contract_version: "1.0"`) as single source of truth for all Night 1 tuning and scoring parameters.
-- Pure deterministic 60Hz `Night1Simulation` core (`src/dao_den_long/core/config.py`, `engine.py`): WASD + camera-yaw movement, vector normalization, rising-edge jump/interact/pulse, mote pickup & carry capacity, 5 Great Lanterns (`L1..L5`) with `safe_radius`, Shadow Ink chase + stun + pushback + drop ratio + invulnerability, dawn timer, and scoring.
-- Strict Test Contract v1.0 headless CLI (`src/dao_den_long/headless/runner.py`, `validation.py`) supporting `--seed`, `--night 1`, `--scenario`, `--inputs`, `--ticks`, `--out`, `--snapshot-every` with exit code `2` on invalid contract inputs.
-- Playable WebGL2 3D Đêm 1 – Đảo Bến (`src/dao_den_long/web/`): May with nón lá + hanging lantern, orbiting carried fireflies, 5 Great Lanterns warming the island sky/ground, Shadow Ink enemies, expanding pulse VFX, HUD, replay overlay, and procedural Web Audio chimes.
-- Phase 1 test suite (`tests/test_phase1_core.py`, `test_phase1_contract.py`, `test_phase1_web.py`) and reusable contract scenarios under `tests/scenarios/`.
-- Phase 1 traceability proof and independent subagent review under `docs/proof/phase-1/`.
-
-### Changed
-- Replaced CP0 hello-world tests (`tests/test_cp0_smoke.py`) with full Phase 1 core/contract/web test suites (recorded in `docs/notes/decisions.md`).
-- Upgraded `scripts/verify.py`, `AGENTS.md`, `.github/workflows/ci.yml`, and `Dockerfile` for Test Contract v1.0 verification.
+- Initial Night 1 simulation, Test Contract v1.0 headless CLI, WebGL2 game, test suite, and Phase 1 proof/review.
 
 ## [0.0.1] - CP0 (Preparation Foundation)
 ### Added
-- Archived original lab README to `docs/LAB_SPEC.md` and preserved all guide/rubric/rules docs.
-- Added repo hygiene (`.gitignore`, `.gitattributes` enforcing LF), `LICENSE` (MIT), `CREDITS.md`, `pyproject.toml`, and `Dockerfile`.
-- Added AI harness: `AGENTS.md`, skills (`verify-phase`, `independent-review`), `.githooks/pre-commit`, `.claude/settings.json` Stop hook, and `.github/workflows/ci.yml` (`ubuntu-latest`).
-- Built zero-dependency deterministic core, headless CLI, WebGL2 hello world, and `scripts/verify.py`.
+- Repo hygiene, AI harness, CI workflow, deterministic Python scaffold, and `scripts/verify.py`.

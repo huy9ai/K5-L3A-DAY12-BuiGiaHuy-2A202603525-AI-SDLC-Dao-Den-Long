@@ -1,0 +1,51 @@
+=== DAO DEN LONG VERIFICATION REPORT ===
+Timestamp (UTC): 2026-11-20T09:03:05Z
+Mode: standard
+Phase: phase-2
+Git HEAD: f17dddb
+Python: 3.14.10 (C:\Users\nhoch\AppData\Local\Programs\Python\Python314\python.exe)
+Platform: Windows-11-10.0.26300-SP0
+
+--- [PASS] Test Contract v1.1 Schema (game.contract.json) ---
+contract_version=1.1, team=2A202603525-BuiGiaHuy, dash_speed=14.0, fall_enabled=True
+
+--- [PASS] Unit, Regression & Phase 2 Tests (unittest) ---
+test_default_night1_determinism_without_scenario (test_phase1_contract.TestPhase1Contract.test_default_night1_determinism_without_scenario) ... ok
+test_invalid_inputs_and_scenarios_exit_code_2 (test_phase1_contract.TestPhase1Contract.test_invalid_inputs_and_scenarios_exit_code_2) ... ok
+test_lit_lantern_safe_radius_blocks_shade (test_phase1_contract.TestPhase1Contract.test_lit_lantern_safe_radius_blocks_shade) ... ok
+test_lose_dawn (test_phase1_contract.TestPhase1Contract.test_lose_dawn) ... ok
+test_lose_no_flames_and_drop_ratio (test_phase1_contract.TestPhase1Contract.test_lose_no_flames_and_drop_ratio) ... ok
+test_win_scenario_full_flow_and_determinism (test_phase1_contract.TestPhase1Contract.test_win_scenario_full_flow_and_determinism) ... ok
+test_jump_rising_edge_and_gravity (test_phase1_core.TestPhase1Core.test_jump_rising_edge_and_gravity) ... ok
+test_movement_yaw_and_vector_normalization (test_phase1_core.TestPhase1Core.test_movement_yaw_and_vector_normalization) ... ok
+test_pickup_capacity_and_rising_edge_deposit (test_phase1_core.TestPhase1Core.test_pickup_capacity_and_rising_edge_deposit) ... ok
+test_pulse_3d_distance_15_tick_push_and_cooldown (test_phase1_core.TestPhase1Core.test_pulse_3d_distance_15_tick_push_and_cooldown) ... ok
+test_scenario_setup_emits_no_score_and_preserves_other_lanterns (test_phase1_core.TestPhase1Core.test_scenario_setup_emits_no_score_and_preserves_other_lanterns) ... ok
+test_tuning_matches_contract_json (test_phase1_core.TestPhase1Core.test_tuning_matches_contract_json) ... ok
+test_web_routes_campaign_pause_dash_and_camera_fix (test_phase1_web.TestPhase1Web.test_web_routes_campaign_pause_dash_and_camera_fix) ... ok
+test_dash_headless_ground_and_air_holds_y (test_phase2_features.TestPhase2Features.test_dash_headless_ground_and_air_holds_y) ... ok
+test_fall_ignores_invuln_loses_motes_waits_60_and_respawns (test_phase2_features.TestPhase2Features.test_fall_ignores_invuln_loses_motes_waits_60_and_respawns) ... ok
+test_full_night3_21600_ticks_under_30s (test_phase2_features.TestPhase2Features.test_full_night3_21600_ticks_under_30s) ... ok
+test_night2_charm_drifter_steal_and_pulse_drop (test_phase2_features.TestPhase2Features.test_night2_charm_drifter_steal_and_pulse_drop) ... ok
+test_night2_launch_pad_lands_on_island_b (test_phase2_features.TestPhase2Features.test_night2_launch_pad_lands_on_island_b) ... ok
+test_night3_ramp_headless_and_tiers_tower_wind (test_phase2_features.TestPhase2Features.test_night3_ramp_headless_and_tiers_tower_wind) ... ok
+test_pause_freezes_sim_tick_and_timers (test_phase2_features.TestPhase2Features.test_pause_freezes_sim_tick_and_timers) ... ok
+test_shade_5_states_safe_radius_pushout_and_dropped_mote_ttl (test_phase2_features.TestPhase2Features.test_shade_5_states_safe_radius_pushout_and_dropped_mote_ttl) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 5.114s
+
+OK
+
+--- [PASS] 3-Night Headless Determinism (SHA-256 x2) ---
+[night1_win] SHA-256=a227a4788d1349682037767abd9ef3d0c1bf218d0e0fb8c71997d65562787ef4 | lines=41 | end=(state=won, ticks=235, score=947)
+[night2_drifter_charm] SHA-256=c6ebfa64b354a4a311c79b1a039b36b5f2ef56713b8f7786f0be01695e72f428 | lines=17 | end=(state=playing, ticks=80, score=0)
+[night3_ramp_wind] SHA-256=21360f5dbcf2101f6330ae3806ed5a2f83cd2a1b7b415938451108b0279d5b50 | lines=11 | end=(state=playing, ticks=80, score=0)
+
+--- [PASS] Full-Night Headless Benchmark (21,600 ticks <= 30s) ---
+Night 3 full 21600-tick headless (with motes+shades+drifters+wind) completed in 1.176s (limit <= 30.0s), lines=2174
+
+--- [PASS] Secret & Hygiene Scan ---
+Scanned 65 text files; 0 env files or secret key patterns found.
+
+OVERALL RESULT: PASS

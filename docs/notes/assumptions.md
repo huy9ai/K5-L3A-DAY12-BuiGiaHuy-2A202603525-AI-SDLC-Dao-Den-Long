@@ -5,40 +5,43 @@
 ---
 
 ## Checkpoint 0 (Chuẩn bị)
-- **Môi trường local:** Máy phát triển chạy Windows, có Python 3.14.10, `pytest` 8.4.2, `git`, `Docker` (chưa cài `node`/`npm`).
-- **Quyết định nền tảng:** Chọn Python 3 stdlib + WebGL2 để không phụ thuộc cài thêm gói ngoài, chạy đồng nhất trên Windows/macOS/Linux.
+- **Môi trường local:** Máy phát triển chạy Windows, có Python 3.14.10, `pytest` 8.4.2, `git`, `Docker`.
+- **Quyết định nền tảng:** Python 3 stdlib + WebGL2 + Web Audio API (0 phụ thuộc ngoài).
 
 ---
 
 ## Phase 1 (PRD-0 — Đêm 1: Đảo Bến + Test Contract v1.0)
-
-### Giả định cho các chỗ PRD-0 để mở
-| ID | Chỗ mơ hồ trong PRD-0 | Giả định đã chọn (khớp `game.contract.json`) | Lý do |
-|---|---|---|---|
-| P1-A1 | Kích thước đảo & vị trí 5 Đèn Lồng Lớn | Đảo tròn bán kính `50m`, tâm `(0, 0, 0)`; `L1..L5` bố trí đều trên vòng bán kính `25m` với `L1` tại `[0, 0, 25]` | Khớp ví dụ scenario `L1: [0,0,25]` trong Contract D và đủ rộng cho 5 vùng đèn cách nhau ~`29.4m` |
-| P1-A2 | Rơi khỏi đảo (`fall_enabled`) | `fall_enabled = false`, mép đảo chặn mềm người chơi trong bán kính `50m` (mở rộng động nếu scenario đặt thực thể xa hơn) | An toàn cho chơi thử ở Phase 1, không phát sự kiện rơi ngoài ý muốn |
-| P1-A3 | Các thông số `tuning` & `score` | `player_speed=6.0`, `carry_capacity=6`, `lantern_cost=4`, `pickup_radius=1.5`, `interact_radius=3.0`, `pulse_cost=2`, `pulse_radius=7.0`, `pulse_stun_s=3.0`, `pulse_push_m=6.0`, `pulse_cooldown_s=3.0`, `safe_radius=5.0`, `shade_speed=3.8`, `shade_hit_radius=1.2`, `flames=3`, `invuln_s=2.0`, `hit_drop_ratio=0.5`, `night1_duration_s=300` | `6 * 0.5 = 3` số nguyên chẵn; đủ 1 lần thắp đèn (`4`) + 1 lần pulse (`2`) từ túi đầy; thời lượng 5 phút cân bằng Đêm 1 |
-| P1-A4 | Tốc độ sinh ngẫu nhiên khi `random_motes`/`random_shades` bật | Khởi đầu `15` đom đóm (`M1..M15`), tối đa `18` (bù mỗi `240` tick); khởi đầu `2` Bóng Mực (`S1, S2`), tối đa `5` (thêm mỗi `2100` tick ngoài `safe_radius`) | Giữ nhịp độ chơi mượt, không quá thưa cũng không gây quá tải ở giai đoạn đầu |
-| P1-A5 | Thưởng thời gian & ngọn lửa khi thắng | `floor(round(time_left_s, 6)) * 5 + flames * 100` | Rõ ràng, tất định, tránh sai số dấu phẩy động khi tròn giây |
-| P1-A6 | Số lượng Bóng Mực & đom đóm khi `scenario` truyền danh sách | Theo đúng Contract D: thay thế danh sách ban đầu, đánh ID tự động tuần tự (`S1..`, `M1..`) không trùng ID đã khai báo, giữ nguyên 0 event / 0 điểm khi dựng | Tuân thủ nguyên văn Test Contract v1.0 mục D |
-
-### Tiêu chí nghiệm thu (Acceptance Criteria)
-| ID | Yêu cầu | Tiêu chí kiểm tra ("Làm A -> thấy B") | Cách kiểm chứng |
-|---|---|---|---|
-| P1-AC1 | `game.contract.json` hợp lệ & đồng bộ | Đọc `game.contract.json` và khởi tạo `Night1Simulation` -> mọi thông số tuning khớp nhau tuyệt đối | `test_tuning_matches_contract_json` + `scripts/verify.py` |
-| P1-AC2 | Di chuyển + xoay camera + chuẩn hóa vector + nhảy | Chạy 60 tick với `move=[1,1]` -> đi đúng `6.0m` theo hướng 45°; `cam_yaw_deg=90` + `move=[0,1]` -> đi `+X`; nhấn `jump` -> `y > 0` rồi đáp `y = 0` | `test_movement_yaw_and_vector_normalization`, `test_jump_rising_edge_and_gravity` |
-| P1-AC3 | Nhặt đom đóm & nạp đèn (rising edge) | Đi qua 8 đom đóm -> chỉ nhặt `6` (`carry_capacity`), `+60` điểm; giữ `interact=true` 2 tick gần đèn -> nạp `4` đom đóm đúng 1 lần, đèn `lit=true`, `+200` điểm | `test_pickup_capacity_and_rising_edge_deposit` |
-| P1-AC4 | Tỏa sáng xua Bóng Mực & hồi chiêu | Nhấn `pulse` gần `S1` -> `S1` đổi `state="stunned"`, bị đẩy lùi `6m`, mất `2` đom đóm, `+50` điểm; nhấn lại ngay -> bị chặn bởi cooldown | `test_pulse_stuns_pushes_and_enforces_cooldown` |
-| P1-AC5 | Bóng Mực đuổi, `safe_radius`, chạm mất lửa & rơi đom đóm | Đèn sáng giữ Bóng Mực ở `dist >= 5.0m`; khi bị chạm với `flames=1, carried=2` -> `flames=0, dropped=1`, `game_over(lost, no_flames)` | `test_lit_lantern_safe_radius_blocks_shade`, `test_lose_no_flames_and_drop_ratio` |
-| P1-AC6 | Thắng (`all_lit`) & thua hết giờ (`dawn`) | Nạp đủ đèn cuối -> `game_over(won, all_lit)` + thưởng điểm; hết `time_left_s` -> `game_over(lost, dawn)` | `test_win_scenario_full_flow_and_determinism`, `test_lose_dawn` |
-| P1-AC7 | Tính tất định & mã lỗi Contract B/C | Chạy `run.py headless` 2 lần cùng seed/scenario/inputs -> file JSONL giống nhau từng byte; inputs/scenario lỗi -> exit code `2` | `test_default_night1_determinism_without_scenario`, `test_invalid_inputs_and_scenarios_exit_code_2` |
-| P1-AC8 | Chơi được 3D + HUD + chơi lại (Playable WebGL2) | Mở `/` hiển thị HUD, đảo, Mây đội nón lá, 5 đèn, đom đóm, Bóng Mực; `/api/tick` cập nhật trạng thái; `/api/reset` chơi lại | `test_web_routes_gameplay_tick_and_reset` + kiểm tra trực tiếp trên trình duyệt |
+*(Đã hoàn thành và được chuẩn hóa lại số liệu sang Contract v1.1 ở Phase 2 theo TICKET-02.)*
 
 ---
 
-## Phase 2 (Ticket-02 — Ba hòn đảo) — *Chờ dán nội dung Ticket-02*
-*(Sẽ cập nhật giả định & Acceptance Criteria ngay khi bước sang Phase 2)*
+## Phase 2 (TICKET-02 — Ba hòn đảo + Test Contract v1.1)
+
+### Giả định cho các chi tiết kỹ thuật mở trong TICKET-02
+| ID | Chỗ mở / Cần chốt | Giả định đã chọn | Lý do |
+|---|---|---|---|
+| P2-A1 | Điểm xuất phát người chơi ở Đêm 3 (Đảo Chuông) | `(0, 0, -15)` hướng `+Z` | Tâm `(0, 0)` của Đảo Chuông bị chiếm bởi Tầng 2 (`r <= 8m, Y=6`) và Tháp Chuông (`r <= 2m, Y=6..14`); đặt tại `(0, 0, -15)` trên Tầng 0 an toàn, không vướng tháp và nhìn thẳng về đồi bậc thang |
+| P2-A2 | Đường đi của Gió Lạc khi `idle` và `flee` | Gió Lạc là sinh vật bay trên không (`Y ~ 1.0–1.5m`) nên không bị chặn bởi mặt nước/vách đá, lượn vòng chậm `2 m/s` quanh khu vực spawn khi `idle` | Khớp mô tả "dải lụa xám xanh bay nhanh", không bị kẹt địa hình cầu tre Đảo Cau |
+| P2-A3 | Hạt đom đóm rơi bị đánh gần mép đảo | Nếu điểm rơi vòng `1.5–2.5m` rơi ra ngoài biển mây thì giữ hạt tại chân Mây trên mặt đất đảo gần nhất | Tránh rơi đom đóm xuống khoảng không không thể nhặt lại |
+| P2-A4 | Thời gian tăng tốc/dừng (`<= 0.1 s`) | Phản hồi đạt vận tốc chuẩn ngay trong 1 tick (`1/60s ≈ 0.0167s <= 0.1s`) | Đáp ứng đúng yêu cầu `<= 0.1 s` đồng thời giữ độ chính xác toán học cho test quãng đường `speed * t` |
+| P2-A5 | Giá trị `ttl_s` của đom đóm thường (`kind: "random"`) trong snapshot | `null` (`None`) cho đom đóm thường vĩnh viễn và số giây thực (`> 0`) cho đom đóm rơi (`kind: "dropped"`) | Phân biệt rõ loại không hết hạn với loại có TTL 480 tick (`8.0s`) |
+
+### Tiêu chí nghiệm thu (Acceptance Criteria — đủ Phần 1, 2, 3, 4 của TICKET-02)
+| ID | Hạng mục (TICKET-02) | Tiêu chí kiểm tra ("Làm A -> thấy B") | Cách kiểm chứng |
+|---|---|---|---|
+| P2-AC1 | Số liệu chuẩn & Contract v1.1 | `game.contract.json` bản `1.1` khớp mọi hằng số Phần 1 & 4; `core/config.py` nạp nguyên vẹn | `test_tuning_matches_contract_json` |
+| P2-AC2 | Thứ tự 12 bước & Hồi quy Phase 1 | Mọi kịch bản thắng/thua/safe_radius Đêm 1 chạy đúng với số chuẩn (`lantern_cost=10`, `safe_radius=6.0`, `+10` điểm khi nạp) | `test_phase1_core.py` & `test_phase1_contract.py` |
+| P2-AC3 | Lướt (`dash`) mặt đất & trên không | Nhấn `dash` -> chạy `14 m/s` trong `12 tick` (`2.8m`), hồi `90 tick`; lướt khi đang nhảy giữ nguyên tọa độ `Y` | `test_dash_headless_ground_and_air_holds_y` |
+| P2-AC4 | Rơi khỏi đảo (`Y < -10`) | Đi ra mép đảo dù có `invuln_ticks=120` -> rơi xuống `Y < -10`, mất `1` lửa + mất hết đom đóm (`by="fall", lost=4`), chờ `60 tick` rồi hồi sinh tại spawn với `vel=0` và `invuln=true` | `test_fall_ignores_invuln_loses_motes_waits_60_and_respawns` |
+| P2-AC5 | Bóng Mực 5 trạng thái, recoil, đẩy safe_radius 30 tick & đom đóm rơi | Đèn vừa thắp đẩy Bóng Mực bên trong ra mép `6m` trong `<= 30` tick và không gây sát thương; khi chạm Mây tạo đom đóm `dropped` (`TTL=480`) và chuyển `recoil` | `test_shade_5_states_safe_radius_pushout_and_dropped_mote_ttl` |
+| P2-AC6 | Tỏa Sáng 3D + đẩy 15 tick | Nhấn `pulse` (3 đom đóm) -> check khoảng cách 3D `<= 5m` từ `Y+0.8`, đẩy lùi `4m` trong `15 tick`, `+5` điểm/con | `test_pulse_3d_distance_15_tick_push_and_cooldown` |
+| P2-AC7 | Tạm dừng (`pause`) | Nhấn `pause` -> `tick` tiếp tục tăng nhưng `sim_tick` và `time_left_s` đứng yên, `state="paused"`; nhấn lần 2 -> `resumed` | `test_pause_freezes_sim_tick_and_timers` |
+| P2-AC8 | Đêm 2: Đảo Cau, cầu tre, bục nhảy, Gió Lạc & Bùa Gió | Đi vào bục `(20,0,18)` -> bay ~1.4s đáp sang đảo B (`r < 28m` quanh `(70,0)`) không bị ghi đè phím; nhặt Bùa Gió chạy `7.2 m/s` & Lướt 0 hồi chiêu; Gió Lạc cướp 3 đom đóm rồi Tỏa Sáng đánh rơi lại `drifter_drop` | `test_night2_launch_pad_lands_on_island_b`, `test_night2_charm_drifter_steal_and_pulse_drop` |
+| P2-AC9 | Đêm 3: 3 tầng, dốc, vách, bục nhảy tầng 2, tháp chuông & gió mạnh | Leo dốc `30°` lên `Y=3`; bị chặn ở vách dựng đứng & tháp chuông `r < 2m`; bục `(0,3,13)` phóng lên tầng 2 `Y=6`; gió thổi ở tick `1800` đẩy `2 m/s` | `test_night3_ramp_headless_and_tiers_tower_wind` |
+| P2-AC10 | Sửa lỗi lật camera/phím Phase 1 & giao diện 3 Đêm đầy đủ | `mat4LookAt` dùng chuẩn right-handed `x_cam = (zz, 0, -zx)`; UI có Menu, Intro Ông Đăng, Pause, Cài đặt lưu `localStorage`, HUD 10 ô, mũi tên chỉ đèn ngoài màn hình, 11 SFX & bảng màu chuẩn | `test_web_routes_campaign_pause_dash_and_camera_fix` + kiểm tra trực quan |
+| P2-AC11 | Hiệu năng headless 21.600 tick | Chạy đầy đủ Đêm 3 `21.600` tick ở chế độ headless trong `<= 30.0s` | `test_full_night3_21600_ticks_under_30s` + `scripts/verify.py` |
+
+---
 
 ## Phase 3 (Ticket-03) — *Chờ phát hành*
-
 ## Phase 4 (Ticket-04) — *Chờ phát hành*
