@@ -3,27 +3,70 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Đảo Đèn Lồng — CP0 Hello 3D</title>
+  <title>Đảo Đèn Lồng — Đêm 1: Đảo Bến</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
   <canvas id="scene-canvas" aria-label="Cảnh 3D Đảo Đèn Lồng"></canvas>
 
-  <aside class="hud" aria-live="polite">
-    <div class="badge">CP0 · Hello 3D + Core Đồng Bộ</div>
-    <h1>Đảo Đèn Lồng</h1>
-    <p class="subtitle">Kéo chuột để xoay góc nhìn · Nhấn Space hoặc nút bên dưới để thắp sáng đèn.</p>
-    <dl class="stats">
-      <div><dt>Tick</dt><dd id="stat-tick">0</dd></div>
-      <div><dt>Đom đóm</dt><dd id="stat-fireflies">0</dd></div>
-      <div><dt>Độ sáng đèn</dt><dd id="stat-glow">1.00</dd></div>
-      <div><dt>Renderer</dt><dd id="stat-renderer">WebGL2</dd></div>
-    </dl>
+  <header class="hud-top">
+    <div class="stat-pill">
+      <span class="label">Ngọn lửa (Máu)</span>
+      <strong id="hud-flames" class="flames">3 / 3</strong>
+    </div>
+    <div class="stat-pill">
+      <span class="label">Đom đóm đang giữ</span>
+      <strong id="hud-carried">0 / 6</strong>
+    </div>
+    <div class="stat-pill">
+      <span class="label">Đèn Lồng Lớn</span>
+      <strong id="hud-lanterns">0 / 5</strong>
+    </div>
+    <div class="stat-pill">
+      <span class="label">Thời gian</span>
+      <strong id="hud-time">05:00</strong>
+    </div>
+    <div class="stat-pill">
+      <span class="label">Điểm số</span>
+      <strong id="hud-score">0</strong>
+    </div>
+    <div class="stat-pill">
+      <span class="label">Tỏa sáng (Q/Shift)</span>
+      <strong id="hud-pulse">Sẵn sàng</strong>
+    </div>
+  </header>
+
+  <aside class="hud-controls">
+    <div class="badge">Đêm 1 · Đảo Bến · Contract v1.0</div>
+    <p id="hud-hint" class="hint">Thu thập đom đóm vàng cam, né Bóng Mực tím đen và thắp sáng đủ 5 Đèn Lồng Lớn!</p>
+    <ul class="keys">
+      <li><kbd>WASD</kbd> Di chuyển</li>
+      <li><kbd>Space</kbd> Nhảy</li>
+      <li><kbd>E</kbd> / <kbd>F</kbd> Nạp ánh sáng vào đèn</li>
+      <li><kbd>Q</kbd> / <kbd>Shift</kbd> Tỏa sáng xua Bóng Mực (-2)</li>
+      <li><kbd>Kéo chuột</kbd> / <kbd>← →</kbd> Xoay camera</li>
+      <li><kbd>R</kbd> Chơi lại · <kbd>M</kbd> Âm thanh</li>
+    </ul>
     <div class="actions">
-      <button id="btn-pulse" type="button">Thắp nhịp đèn (Space)</button>
-      <button id="btn-reset" type="button" class="secondary">Đặt lại</button>
+      <button id="btn-audio" type="button" class="secondary">Âm thanh: Bật (M)</button>
+      <button id="btn-reset" type="button">Chơi lại (R)</button>
     </div>
   </aside>
+
+  <div id="context-prompt" class="prompt hidden" aria-live="polite"></div>
+
+  <div id="gameover-overlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="overlay-card">
+      <div id="overlay-badge" class="badge">Kết thúc</div>
+      <h2 id="overlay-title">Đêm 1 kết thúc</h2>
+      <p id="overlay-reason" class="overlay-desc"></p>
+      <div class="overlay-score">
+        <span>Tổng điểm</span>
+        <strong id="overlay-score">0</strong>
+      </div>
+      <button id="btn-replay" type="button">Chơi lại Đêm 1</button>
+    </div>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

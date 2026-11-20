@@ -1,16 +1,18 @@
-"""Zero-dependency HTTP server serving the 3D WebGL2 scene and simulation API."""
+"""Zero-dependency HTTP server serving the 3D WebGL2 game and simulation API."""
 
 from __future__ import annotations
 
+from dataclasses import asdict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 from pathlib import Path
 import threading
 from typing import Any
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import unquote, urlparse
 
-from dao_den_long.core.engine import HelloSimulation, SimConfig
+from dao_den_long.core.config import TICK_RATE, load_tuning
+from dao_den_long.core.engine import InputFrame, Night1Simulation
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -23,22 +25,63 @@ CONTENT_TYPES = {
 
 
 class SimulationSession:
-    """Thread-safe wrapper around the deterministic simulation."""
+    """Thread-safe live Night 1 session driving the 3D browser client."""
 
     def __init__(self, seed: int = 42) -> None:
         self._lock = threading.Lock()
-        self._sim = HelloSimulation(SimConfig(seed=seed))
+        self._seed = seed
+        self._tuning = load_tuning()
+        self._sim = Night1Simulation(seed=self._seed, tuning=self._tuning)
 
-    def snapshot(self, *, step: bool = True, action: dict[str, Any] | None = None) -> dict[str, Any]:
-        with self._lock:
-            if step:
-                self._sim.step(action=action)
-            return self._sim.snapshot()
+    def _payload(self, events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        return {
+            "snapshot": self._sim.snapshot(),
+            "tuning": asdict(self._tuning),
+            "cooldowns": {
+                "pulse_s": round(self._sim.player.pulse_cooldown_ticks / TICK_RATE, 3),
+                "invuln_s": round(self._sim.player.invuln_ticks / TICK_RATE, 3),
+            },
+            "facing_yaw_deg": round(self._sim.player.facing_yaw_deg, 2),
+            "events": events or [],
+        }
 
-    def reset(self) -> dict[str, Any]:
+    def state(self) -> dict[str, Any]:
         with self._lock:
-            self._sim.reset()
-            return self._sim.snapshot()
+            return self._payload([])
+
+    def step_ticks(self, body: dict[str, Any]) -> dict[str, Any]:
+        raw_move = body.get("move", [0.0, 0.0])
+        mx = max(-1.0, min(1.0, float(raw_move[0]))) if isinstance(raw_move, (list, tuple)) and len(raw_move) == 2 else 0.0
+        mz = max(-1.0, min(1.0, float(raw_move[1]))) if isinstance(raw_move, (list, tuple)) and len(raw_move) == 2 else 0.0
+        cam_yaw = float(body.get("cam_yaw_deg", 0.0))
+        jump = bool(body.get("jump", False))
+        interact = bool(body.get("interact", False))
+        pulse = bool(body.get("pulse", False))
+        raw_steps = body.get("steps", 1)
+        steps = max(1, min(4, int(raw_steps) if isinstance(raw_steps, (int, float)) else 1))
+
+        inp = InputFrame(
+            move=(mx, mz),
+            cam_yaw_deg=cam_yaw,
+            jump=jump,
+            interact=interact,
+            pulse=pulse,
+        )
+        all_events: list[dict[str, Any]] = []
+        with self._lock:
+            for _ in range(steps):
+                if self._sim.state != "playing":
+                    break
+                all_events.extend(self._sim.step(inp))
+            return self._payload(all_events)
+
+    def reset(self, seed: int | None = None) -> dict[str, Any]:
+        with self._lock:
+            if seed is not None:
+                self._seed = int(seed)
+            self._tuning = load_tuning()
+            self._sim = Night1Simulation(seed=self._seed, tuning=self._tuning)
+            return self._payload([])
 
 
 def _json_response(status: HTTPStatus, payload: dict[str, Any]) -> tuple[HTTPStatus, str, bytes]:
@@ -50,19 +93,20 @@ def dispatch_request(
     session: SimulationSession,
     method: str,
     target_path: str,
+    body: bytes = b"",
 ) -> tuple[HTTPStatus, str, bytes]:
     """Pure HTTP router returning (status, content_type, body_bytes)."""
-    parsed = urlparse(target_path)
-    route = parsed.path
+    route = urlparse(target_path).path
 
     if method == "GET":
         if route == "/health":
-            return _json_response(HTTPStatus.OK, {"status": "ok", "phase": "cp0"})
+            return _json_response(
+                HTTPStatus.OK,
+                {"status": "ok", "phase": "phase-1", "contract_version": "1.0"},
+            )
 
         if route == "/api/state":
-            query = parse_qs(parsed.query)
-            should_step = query.get("step", ["1"])[0] != "0"
-            return _json_response(HTTPStatus.OK, session.snapshot(step=should_step))
+            return _json_response(HTTPStatus.OK, session.state())
 
         if route == "/":
             index_file = STATIC_DIR / "index.html"
@@ -82,10 +126,22 @@ def dispatch_request(
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     if method == "POST":
-        if route == "/api/pulse":
-            return _json_response(HTTPStatus.OK, session.snapshot(step=True, action={"pulse": True}))
+        parsed_body: dict[str, Any] = {}
+        if body.strip():
+            try:
+                loaded = json.loads(body.decode("utf-8"))
+                if not isinstance(loaded, dict):
+                    return _json_response(HTTPStatus.BAD_REQUEST, {"error": "JSON body must be object"})
+                parsed_body = loaded
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                return _json_response(HTTPStatus.BAD_REQUEST, {"error": f"Invalid JSON: {exc}"})
+
+        if route == "/api/tick":
+            return _json_response(HTTPStatus.OK, session.step_ticks(parsed_body))
         if route == "/api/reset":
-            return _json_response(HTTPStatus.OK, session.reset())
+            raw_seed = parsed_body.get("seed")
+            new_seed = int(raw_seed) if isinstance(raw_seed, int) and not isinstance(raw_seed, bool) else None
+            return _json_response(HTTPStatus.OK, session.reset(seed=new_seed))
         return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     return _json_response(HTTPStatus.NOT_FOUND, {"error": "not found"})
@@ -115,14 +171,22 @@ class _LanternRequestHandler(BaseHTTPRequestHandler):
             super().log_message(format, *args)
 
     def _handle(self, method: str) -> None:
-        status, content_type, body = dispatch_request(self.server.session, method, self.path)
+        req_body = b""
+        if method == "POST":
+            length = int(self.headers.get("Content-Length", "0") or 0)
+            if length > 0:
+                req_body = self.rfile.read(min(length, 65536))
+
+        status, content_type, resp_body = dispatch_request(
+            self.server.session, method, self.path, req_body
+        )
         cache_control = "no-store" if content_type.startswith("application/json") else "no-cache"
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", cache_control)
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(len(resp_body)))
         self.end_headers()
-        self.wfile.write(body)
+        self.wfile.write(resp_body)
 
     def do_GET(self) -> None:  # noqa: N802
         self._handle("GET")
