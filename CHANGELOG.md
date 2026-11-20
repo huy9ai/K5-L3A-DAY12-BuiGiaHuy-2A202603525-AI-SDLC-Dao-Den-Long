@@ -1,49 +1,44 @@
 # Changelog
 
-## [0.3.0] - Phase 3 (TICKET-03: Change Request "Đèn cạn dầu" & Test Contract v1.2)
-### Breaking Changes
-- **Contract version bumped `1.1` → `1.2` (`game.contract.json`):**
-  - Night durations reduced from `300 / 330 / 360 s` to `240 / 270 / 300 s`.
-  - Added required `tuning` keys: `fuel_max: 100`, `fuel_decay_per_s: 1.0`, `fuel_per_mote: 10`, `relight_cost: 5`, `win_ratio: 0.6`, `drain_per_s: 5`, `low_fuel_threshold: 30`, `capacity_max: 20`.
-- **Win condition replaced (`all_lit` removed → `dawn_survived`):**
-  - Lighting all lanterns no longer ends the night early (`game_over.reason = "all_lit"` is removed).
-  - Victory now requires surviving until dawn (`time_left_s == 0`) with at least `ceil(0.6 × total)` lanterns lit (`3/5` Night 1, `4/6` Night 2, `5/7` Night 3), emitting `game_over {"result": "won", "reason": "dawn_survived"}`. Losing all flames still immediately emits `no_flames` (taking priority on the exact dawn tick).
-- **Lantern fuel & interaction rules replaced:**
-  - Lit lanterns now decay at `1.0/s` (exact integer `1/60` per tick), can be refueled via Interact (`used = min(carried, ceil((100 - fuel) / 10))`), and extinguish at `fuel <= 0` (`deposited = 0`, `ever_lit = true`, emitting `lantern_out`). Relighting an `ever_lit` lantern costs `5` motes instead of `10`.
-  - Lit lanterns with `fuel < 30` lose their `6 m` safe zone (retaining it at exactly `fuel == 30.0`).
-- **Shade AI & recovery updated:**
-  - Added 6th Shade state `"drain"`: wandering Shades prioritize the nearest weak lit lantern (`fuel < 30`) and drain `5/s` stacked (emitting `fuel_drain` every 60 ticks).
-  - Stunned Shades now always recover to `"wander"` instead of checking chase range directly.
-- **Scoring formula replaced:**
-  - Deposited/refueled mote score changed from `+10` to `+5` (`per_mote = 5`).
-  - First light awards `+100`; relight awards `+40`.
-  - Pulsing a draining Shade awards `+15` total (`+5` for non-draining).
-  - Removed remaining-time bonus (`per_second_left = 0`); replaced with dawn survival bonus `+50 + floor(fuel)` per lit lantern + `+50` per remaining flame.
-- **Snapshot & Event schema changes (Contract v1.2):**
-  - `lanterns[]` adds `fuel` (1 decimal, `0` when unlit), `ever_lit`, and `relit_count`.
-  - `player` adds dynamic `capacity` (`min(20, 10 + 2 * successful_lights)`).
-  - `lantern_lit` adds `relight: true|false`; added events `refuel`, `lantern_out`, `fuel_drain`.
-
+## [1.0.0] - Phase 4 & Release v1.0.0 (TICKET-04: Bình minh — Phát hành v1.0.0 & Test Contract v1.3)
 ### Added
-- Dynamic growing firefly capacity (`10 → 20` by `+2` per successful light/relight within a night).
-- Colorblind accessibility mode ("Bảng màu dễ phân biệt", saved to `localStorage`): Shade rim/eyes `#7A3CFF → #00B3FF`, UI alerts `#FF5A5F → #FFFFFF` + `⚠`, unlit lanterns squashed 20% with torn-paper slashes, and 1 Hz low-fuel blinking on both 3D lanterns and overhead fuel bars.
-- Upgraded 3D WebGL2 visuals (`src/dao_den_long/web/static/`): traditional Vietnamese **Áo Dài** (ivory bodice, high collar, flowing split panels with gold trim, wide silk trousers, crimson scarf) + **Nón Lá** with hanging mini lantern for Mây, dynamic warm point lighting from up to 7 lit lanterns, night fog, starfield & crescent moon, floating island cliffs, and perimeter bamboo (zero impact on headless output).
-- Added Phase 3 headless scenarios (`p3_fuel_relight_refuel_*`, `p3_shade_drain_*`) and unit/integration suite `tests/test_phase3_features.py`.
+- **Test Contract v1.3 (`game.contract.json`):** Bumped `contract_version` to `"1.3"`, added `"bench_cmd": "python3 run.py bench"` and `"soak_cmd": "python3 run.py soak"`, preserving all v1.0–v1.2 rules.
+- **Standardized 1280×720 Benchmark Mode (`python3 run.py bench --seed 42 --duration 30 --out bench.json`):**
+  - Loads Night 1 with exact `200` wandering Shades (`seed 42`), `100` Motes, `3` lit lanterns `L1–L3` (`fuel = 100`), Mây stationary at `(0,0,0)`, disabling spawns/damage/pickup/fuel decay/game over and extra creative props.
+  - Camera orbits `(0,0,0)` at radius `30 m`, height `Y = 15 m`, starting at `0°` (`(30,15,0)`), rotating CCW (`15 s` per revolution).
+  - Runs `3 s` warmup followed by `--duration` seconds measurement, outputting `bench.json` (`avg_fps`, `p1_low_fps`, `frame_ms_p95`, `frames`, `load_ms`, `peak_mem_mb`, `vsync_off`, `renderer`, `os`) and exiting with code `0`. Committed real `bench.json` to repository root.
+- **Multi-Night In-Process Soak Test (`python3 run.py soak --seed 7 --nights 10 --out soak.json`):**
+  - Runs 10 consecutive nights (rotating Night 1 → 2 → 3) in a single process with `seed 7 + i` and seeded probabilistic inputs (`30`-tick direction change, `5%` jump, `3%` dash, `2%` pulse, `10%` interact).
+  - Measures process RSS via pure Python stdlib (`mem_start_mb`, `mem_end_mb <= 1.2 * mem_start_mb`, `crashes = 0`). Committed real `soak.json` to repository root.
+- **Persistent Local Leaderboard (`data/leaderboard.json`, `/api/leaderboard`, `python3 run.py --export-leaderboard out.json`):**
+  - Top-10 local leaderboard sorted by `score` descending with chronological tie-breaking.
+  - Supports player name input (`3–12` characters `[A-Za-z0-9_]` plus Vietnamese accented letters) after winning Night 3 (Bình Minh) or losing on any night, plus main-menu Leaderboard modal and CLI export `--export-leaderboard`.
+- **Accessibility Suite (`web/static/`):**
+  - Full key remapping for all 9 actions (`moveUp`, `moveDown`, `moveLeft`, `moveRight`, `jump`, `dash`, `interact`, `pulse`, `pause`) with duplicate-key conflict warning, "Khôi phục mặc định" reset button, and `localStorage` persistence.
+  - Visual subtitles & indicators (`#subtitle-banner`) and off-screen Shade edge arrow (`#shade-edge-arrow`) for Shade spawns, upcoming wind gusts, final 10-second countdown, and low-fuel lanterns (`fuel < 30`).
+  - Reduced Motion toggle (`#input-reduced-motion`) disabling camera shake, screen flash, and rapid blinking.
+  - Minimum `18 px` UI font size at `1280×720` with Large Text (`×1.25` = `22.5 px`) toggle (`#input-large-text`).
+- **Demo Media, Packaging & Final Retro:** Added gameplay preview screenshot (`docs/demo/preview.png`), demo video (`docs/demo/demo.mp4`), Phase 4 test suite (`tests/test_phase4_features.py`), and complete 4-phase Retrospective (`docs/notes/retro.md`).
 
 ### Fixed
-- Resolved all 4 minor Phase 2 review items: dynamic `round(invuln_s * 60)` invulnerability duration, skipping Step 8 inward movement during `safe_push_ticks > 0`, filtering `"removed"` scenario drifters at init, and seamless Night 3 Tier 1 ramp inner overlap (`inner_r - 0.1`).
+- Added vertical height check (`abs(s.y - l.y) <= 1.5m`) to Shade `drain` targeting for multi-tier islands (Phase 3 Review non-blocking note #3) and aligned `.wind-badge` text color with `var(--danger)` (`#FFFFFF`) in Colorblind mode (note #4).
+
+## [0.3.0] - Phase 3 (TICKET-03: Change Request "Đèn cạn dầu" & Test Contract v1.2)
+### Breaking Changes
+- **Contract version bumped `1.1` → `1.2` (`game.contract.json`):** Night durations `240 / 270 / 300 s`, added 8 fuel/drain/capacity tuning keys.
+- **Win condition replaced (`all_lit` removed → `dawn_survived`):** Must survive until dawn with `>= ceil(0.6 * total)` lit lanterns (`3/5`, `4/6`, `5/7`); `no_flames` takes priority on the dawn tick.
+- **Lantern fuel & Shade `drain`:** Integer `1/60` fuel units (`0..6000`), `1/s` decay, `ceil((100-fuel)/10)` refuel, `lantern_out` (`ever_lit`, relight cost `5`), `< 30` loses safe radius, Shade `drain` (`5/s` stacked, `fuel_drain` every 60 ticks), `stunned -> wander`.
+- **Scoring & Growing Capacity:** `+5`/mote, `+100` first light, `+40` relight, `+5` stun (`+15` draining), dawn bonus `+50 + floor(fuel)`/lit lantern + `50 * flames` (0 time bonus); capacity `min(20, 10 + 2 * successful_lights)`.
+
+### Added
+- Colorblind mode ("Bảng màu dễ phân biệt": `#00B3FF` shade rim/eyes, `#FFFFFF` + `⚠` alerts, 20% squashed unlit lanterns with torn paper, 1 Hz low-fuel blink + overhead fuel bars).
+- Upgraded WebGL2 visuals with traditional Vietnamese **Áo Dài** & **Nón Lá** for Mây and dynamic point lights from lit lanterns.
 
 ## [0.2.0] - Phase 2 (TICKET-02: Ba hòn đảo & Test Contract v1.1)
 ### Added
-- Standardized all physics, timings, capacities, radii, and scoring in `game.contract.json` (`contract_version: "1.1"`) and `core/config.py`.
-- Added standardized maps (`src/dao_den_long/core/maps.py`) for Night 1 (Đảo Bến, r=40m), Night 2 (Đảo Cau twin islands + bamboo bridge + 2 launch pads), and Night 3 (Đảo Chuông 3 tiers + 2 ramps + jump pad + bell tower + wind gusts).
-- Added Dash (ground + constant-Y air dash), Fall & 60-tick respawn (`Y < -10m`), 5-state Shade AI (`spawning`, `wander`, `chase`, `recoil`, `stunned`), smooth <=30-tick safe-radius pushout, dropped motes with 480-tick TTL, Gió Lạc (Drifters) steal/drop AI, Bùa Gió (Charms), Pause (`tick` vs `sim_tick`), and Night 3 periodic wind.
-- Upgraded headless CLI & validator (`headless/runner.py`, `validation.py`) to Test Contract v1.1 supporting `--night 1|2|3`, `dash`, `pause`, `drifters`, `charms`, and full-night <= 30s benchmark verification.
-- Upgraded 3D WebGL2 client (`web/static/`) with full 3-Night Campaign UI (Menu, Intro with Ông Đăng quote, Result, Dawn Victory), Pause modal, persistent Settings (`localStorage`), full HUD + 10-slot mote bar + off-screen unlit-lantern directional arrow, standardized hex palette + ambient formula, and 11 procedural SFX + night ambience.
-- Added Phase 2 headless scenarios & tests (`tests/test_phase2_features.py`) and updated regression tests + `scripts/verify.py`.
-
+- Standardized physics, 3-Night maps (`Đảo Bến`, `Đảo Cau`, `Đảo Chuông`), 12-step tick order, Dash, Fall (`Y < -10m`), 5-state Shade AI, Drifters, Wind Charms, Pause, Night 3 wind gusts, 3-Night Campaign UI, and 11 Web Audio SFX.
 ### Fixed
-- Fixed upside-down viewport & reversed `A`/`D` camera orientation in `src/dao_den_long/web/static/app.js` (`mat4LookAt` right-handed cross product `x_cam = (zz, 0, -zx)`).
+- Fixed right-handed `mat4LookAt` camera orientation (`x_cam = (zz, 0, -zx)`).
 
 ## [0.1.0] - Phase 1 (PRD-0 + Test Contract v1.0)
 ### Added
