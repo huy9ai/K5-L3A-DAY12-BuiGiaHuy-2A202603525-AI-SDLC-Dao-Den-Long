@@ -157,13 +157,23 @@ class Night1Simulation:
         # Motes
         self.motes: list[MoteState] = []
         if "motes" in sc:
+            used_mote_ids = {
+                str(item["id"])
+                for item in sc["motes"]
+                if isinstance(item, dict) and item.get("id") is not None
+            }
             for item in sc["motes"]:
                 if isinstance(item, dict):
                     pos = item["pos"]
-                    mid = str(item.get("id") or self._next_mote_id())
+                    if item.get("id") is not None:
+                        mid = str(item["id"])
+                    else:
+                        mid = self._next_unique_id("M", used_mote_ids)
+                        used_mote_ids.add(mid)
                 else:
                     pos = item
-                    mid = self._next_mote_id()
+                    mid = self._next_unique_id("M", used_mote_ids)
+                    used_mote_ids.add(mid)
                 self.motes.append(MoteState(id=mid, x=float(pos[0]), y=float(pos[1]), z=float(pos[2])))
         elif self.random_motes:
             for _ in range(15):
@@ -172,24 +182,24 @@ class Night1Simulation:
         # Shades
         self.shades: list[ShadeState] = []
         if "shades" in sc:
-            used_ids = {
+            used_shade_ids = {
                 str(item["id"])
                 for item in sc["shades"]
-                if isinstance(item, dict) and "id" in item
+                if isinstance(item, dict) and item.get("id") is not None
             }
             for item in sc["shades"]:
                 if isinstance(item, dict):
                     pos = item["pos"]
-                    if "id" in item and item["id"] is not None:
+                    if item.get("id") is not None:
                         sid = str(item["id"])
                     else:
-                        sid = self._next_unique_shade_id(used_ids)
-                        used_ids.add(sid)
+                        sid = self._next_unique_id("S", used_shade_ids)
+                        used_shade_ids.add(sid)
                     s_state = str(item.get("state", "chase"))
                 else:
                     pos = item
-                    sid = self._next_unique_shade_id(used_ids)
-                    used_ids.add(sid)
+                    sid = self._next_unique_id("S", used_shade_ids)
+                    used_shade_ids.add(sid)
                     s_state = "chase"
                 self.shades.append(
                     ShadeState(
@@ -213,15 +223,22 @@ class Night1Simulation:
         )
         self.arena_radius = max(ISLAND_RADIUS, max_dist + 20.0)
 
-    def _next_mote_id(self) -> str:
-        self._mote_seq += 1
-        return f"M{self._mote_seq}"
+    def _next_unique_id(self, prefix: str, used_ids: set[str] | None = None) -> str:
+        """Generate sequential unique ID (M1.., S1..) avoiding any existing IDs."""
+        if used_ids is not None:
+            existing = used_ids
+        elif prefix == "M":
+            existing = {m.id for m in self.motes}
+        else:
+            existing = {s.id for s in self.shades}
 
-    def _next_unique_shade_id(self, used_ids: set[str] | None = None) -> str:
-        existing = used_ids if used_ids is not None else {s.id for s in self.shades}
         while True:
-            self._shade_seq += 1
-            candidate = f"S{self._shade_seq}"
+            if prefix == "M":
+                self._mote_seq += 1
+                candidate = f"M{self._mote_seq}"
+            else:
+                self._shade_seq += 1
+                candidate = f"S{self._shade_seq}"
             if candidate not in existing:
                 return candidate
 
@@ -229,7 +246,7 @@ class Night1Simulation:
         angle = self._rng.uniform(0.0, 2.0 * math.pi)
         radius = math.sqrt(self._rng.uniform(5.0 ** 2, 38.0 ** 2))
         mote = MoteState(
-            id=self._next_mote_id(),
+            id=self._next_unique_id("M"),
             x=radius * math.cos(angle),
             y=0.0,
             z=radius * math.sin(angle),
@@ -250,7 +267,7 @@ class Night1Simulation:
             ) and _xz_dist(sx, sz, self.player.x, self.player.z) >= 12.0:
                 break
         shade = ShadeState(
-            id=self._next_unique_shade_id(),
+            id=self._next_unique_id("S"),
             x=sx,
             y=1.0,
             z=sz,

@@ -221,7 +221,7 @@
     for (const l of snap.lanterns || []) {
       if (l.lit) continue;
       const dist = Math.hypot(p.pos[0] - l.pos[0], p.pos[2] - l.pos[2]);
-      if (dist <= t.interact_radius + 0.3) {
+      if (dist <= t.interact_radius) {
         nearUnlit = l;
         break;
       }
@@ -721,8 +721,8 @@
     pulseWave = Math.max(0, pulseWave - dtSec * 2.4);
     hitFlash = Math.max(0, hitFlash - dtSec * 3.0);
 
-    if (keys.has("ArrowLeft")) camera.yawDeg = (camera.yawDeg - 110 * dtSec) % 360;
-    if (keys.has("ArrowRight")) camera.yawDeg = (camera.yawDeg + 110 * dtSec) % 360;
+    if (keys.has("ArrowLeft")) camera.yawDeg = (camera.yawDeg + 110 * dtSec) % 360;
+    if (keys.has("ArrowRight")) camera.yawDeg = (camera.yawDeg - 110 * dtSec) % 360;
 
     accumulator += dtSec;
     const stepDt = 1 / 60;

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
 import math
 from pathlib import Path
 import sys
@@ -26,10 +27,7 @@ class TestPhase1Core(unittest.TestCase):
         tuning = load_tuning()
         self.assertEqual(raw["contract_version"], "1.0")
         self.assertEqual(tuning.lantern_count_night1, 5)
-        self.assertEqual(tuning.player_speed, raw["tuning"]["player_speed"])
-        self.assertEqual(tuning.carry_capacity, raw["tuning"]["carry_capacity"])
-        self.assertEqual(tuning.lantern_cost, raw["tuning"]["lantern_cost"])
-        self.assertEqual(tuning.safe_radius, raw["tuning"]["safe_radius"])
+        self.assertEqual(asdict(tuning), raw["tuning"])
 
     def test_movement_yaw_and_vector_normalization(self) -> None:
         sim = Night1Simulation(
@@ -130,11 +128,13 @@ class TestPhase1Core(unittest.TestCase):
             scenario={
                 "random_motes": False,
                 "random_shades": False,
+                "motes": [{"id": "M1", "pos": [10, 0, 10]}, [12, 0, 12]],
                 "lanterns": [{"id": "L1", "lit": True}, {"id": "L3", "deposited": 2}],
             },
         )
         snap = sim.snapshot()
         self.assertEqual(snap["score"], 0)
+        self.assertEqual([m["id"] for m in snap["motes"]], ["M1", "M2"])
         self.assertTrue(snap["lanterns"][0]["lit"])
         self.assertFalse(snap["lanterns"][1]["lit"])
         self.assertEqual(snap["lanterns"][2]["deposited"], 2)
