@@ -1,0 +1,60 @@
+=== DAO DEN LONG VERIFICATION REPORT ===
+Timestamp (UTC): 2026-11-20T09:42:36Z
+Mode: standard
+Phase: phase-3
+Git HEAD: 053813e
+Python: 3.14.10 (C:\Users\nhoch\AppData\Local\Programs\Python\Python314\python.exe)
+Platform: Windows-11-10.0.26300-SP0
+
+--- [PASS] Test Contract v1.2 Schema (game.contract.json) ---
+contract_version=1.2, team=2A202603525-BuiGiaHuy, fuel_max=100, win_ratio=0.6, capacity_max=20
+
+--- [PASS] Unit, Regression & Phase 3 Tests (unittest) ---
+test_default_night1_determinism_without_scenario (test_phase1_contract.TestPhase1Contract.test_default_night1_determinism_without_scenario) ... ok
+test_invalid_inputs_and_scenarios_exit_code_2 (test_phase1_contract.TestPhase1Contract.test_invalid_inputs_and_scenarios_exit_code_2) ... ok
+test_lit_lantern_safe_radius_blocks_shade (test_phase1_contract.TestPhase1Contract.test_lit_lantern_safe_radius_blocks_shade) ... ok
+test_lose_dawn (test_phase1_contract.TestPhase1Contract.test_lose_dawn) ... ok
+test_lose_no_flames_and_drop_ratio (test_phase1_contract.TestPhase1Contract.test_lose_no_flames_and_drop_ratio) ... ok
+test_win_scenario_full_flow_and_determinism (test_phase1_contract.TestPhase1Contract.test_win_scenario_full_flow_and_determinism)
+Updated for Ticket-03 (ADR-005): lighting 5/5 does not end early; wins dawn_survived at tick 300. ... ok
+test_jump_rising_edge_and_gravity (test_phase1_core.TestPhase1Core.test_jump_rising_edge_and_gravity) ... ok
+test_movement_yaw_and_vector_normalization (test_phase1_core.TestPhase1Core.test_movement_yaw_and_vector_normalization) ... ok
+test_pickup_capacity_and_rising_edge_deposit (test_phase1_core.TestPhase1Core.test_pickup_capacity_and_rising_edge_deposit) ... ok
+test_pulse_3d_distance_15_tick_push_and_cooldown (test_phase1_core.TestPhase1Core.test_pulse_3d_distance_15_tick_push_and_cooldown) ... ok
+test_scenario_setup_emits_no_score_and_preserves_other_lanterns (test_phase1_core.TestPhase1Core.test_scenario_setup_emits_no_score_and_preserves_other_lanterns) ... ok
+test_tuning_matches_contract_json (test_phase1_core.TestPhase1Core.test_tuning_matches_contract_json) ... ok
+test_web_routes_campaign_pause_dash_colorblind_aodai_and_camera (test_phase1_web.TestPhase1Web.test_web_routes_campaign_pause_dash_colorblind_aodai_and_camera) ... ok
+test_dash_headless_ground_and_air_holds_y (test_phase2_features.TestPhase2Features.test_dash_headless_ground_and_air_holds_y) ... ok
+test_fall_ignores_invuln_loses_motes_waits_60_and_respawns (test_phase2_features.TestPhase2Features.test_fall_ignores_invuln_loses_motes_waits_60_and_respawns) ... ok
+test_full_night3_21600_ticks_under_30s (test_phase2_features.TestPhase2Features.test_full_night3_21600_ticks_under_30s) ... ok
+test_night2_charm_drifter_steal_and_pulse_drop (test_phase2_features.TestPhase2Features.test_night2_charm_drifter_steal_and_pulse_drop) ... ok
+test_night2_launch_pad_lands_on_island_b (test_phase2_features.TestPhase2Features.test_night2_launch_pad_lands_on_island_b) ... ok
+test_night3_ramp_headless_and_tiers_tower_wind (test_phase2_features.TestPhase2Features.test_night3_ramp_headless_and_tiers_tower_wind) ... ok
+test_pause_freezes_sim_tick_and_timers (test_phase2_features.TestPhase2Features.test_pause_freezes_sim_tick_and_timers) ... ok
+test_shade_5_states_safe_radius_pushout_and_dropped_mote_ttl (test_phase2_features.TestPhase2Features.test_shade_5_states_safe_radius_pushout_and_dropped_mote_ttl) ... ok
+test_capacity_growth_capped_at_20_and_v12_validation_errors (test_phase3_features.TestPhase3Features.test_capacity_growth_capped_at_20_and_v12_validation_errors) ... ok
+test_dawn_survival_thresholds_all_nights_scoring_and_no_flames_priority (test_phase3_features.TestPhase3Features.test_dawn_survival_thresholds_all_nights_scoring_and_no_flames_priority) ... ok
+test_fuel_30_safe_radius_boundary_and_weak_lantern_drain (test_phase3_features.TestPhase3Features.test_fuel_30_safe_radius_boundary_and_weak_lantern_drain) ... ok
+test_headless_fuel_decay_lantern_out_relight_refuel_and_capacity_growth (test_phase3_features.TestPhase3Features.test_headless_fuel_decay_lantern_out_relight_refuel_and_capacity_growth) ... ok
+test_multi_shade_drain_stacking_pulse_15_pts_refuel_pushout_and_transitions (test_phase3_features.TestPhase3Features.test_multi_shade_drain_stacking_pulse_15_pts_refuel_pushout_and_transitions) ... ok
+test_refuel_exact_ceil_formula_and_full_lantern_skipped (test_phase3_features.TestPhase3Features.test_refuel_exact_ceil_formula_and_full_lantern_skipped) ... ok
+
+----------------------------------------------------------------------
+Ran 27 tests in 7.372s
+
+OK
+
+--- [PASS] 3-Night + Phase 3 Headless Determinism (SHA-256 x2) ---
+[night1_dawn_win] SHA-256=069c2a6c2ca8b78824a7d6b8553bfcc5da546caef7752438c5dc17868486d921 | lines=47 | end=(state=won, ticks=300, score=1033)
+[night1_p3_fuel_relight] SHA-256=6c9504443432f9ae8cd48adc5d0485fa97a5936f11d0f415f14cac04cf717f18 | lines=76 | end=(state=won, ticks=600, score=642)
+[night1_p3_shade_drain] SHA-256=4a8b99539a5441531f143b8b7c9a48b77cd051303b21377117d54f4ec6ee2972 | lines=48 | end=(state=playing, ticks=400, score=0)
+[night2_drifter_charm] SHA-256=caa92c689a4276fc923d0a07938fb54358598749ec54fa4ffdbc92d60a1fbc29 | lines=17 | end=(state=playing, ticks=80, score=0)
+[night3_ramp_wind] SHA-256=06c7d4c062698588ea4657c13521bcbb95aeb86ea17db07b9345e6296c40566b | lines=11 | end=(state=playing, ticks=80, score=0)
+
+--- [PASS] Full-Night Headless Benchmark (21,600 ticks <= 30s) ---
+Night 3 stress 21600-tick headless (with motes+shades+drifters+wind+fuel) completed in 2.111s (limit <= 30.0s), lines=2174
+
+--- [PASS] Secret & Hygiene Scan ---
+Scanned 74 text files; 0 env files or secret key patterns found.
+
+OVERALL RESULT: PASS
