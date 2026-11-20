@@ -1,4 +1,4 @@
-"""Unit tests for Phase 1 regression + standardized Contract v1.1 core mechanics."""
+"""Unit tests for Phase 1-2 regression updated for Test Contract v1.2 (TICKET-03)."""
 
 from __future__ import annotations
 
@@ -25,8 +25,13 @@ class TestPhase1Core(unittest.TestCase):
     def test_tuning_matches_contract_json(self) -> None:
         raw = load_contract_data()
         tuning = load_tuning()
-        self.assertEqual(raw["contract_version"], "1.1")
+        self.assertEqual(raw["contract_version"], "1.2")
         self.assertEqual(tuning.lantern_count_night1, 5)
+        self.assertEqual(tuning.night1_duration_s, 240)
+        self.assertEqual(tuning.night2_duration_s, 270)
+        self.assertEqual(tuning.night3_duration_s, 300)
+        self.assertEqual(tuning.score.per_mote, 5)
+        self.assertEqual(tuning.score.per_second_left, 0)
         self.assertEqual(asdict(tuning), raw["tuning"])
 
     def test_movement_yaw_and_vector_normalization(self) -> None:
@@ -82,22 +87,27 @@ class TestPhase1Core(unittest.TestCase):
         self.assertEqual(len(picked_events), tuning.carry_capacity)
         self.assertEqual(sim.player.carried, tuning.carry_capacity)
         self.assertEqual(len(sim.motes), 2)
-        # Ticket-02: pickup gives 0 score; deposit gives +10 per mote
         self.assertEqual(sim.score, 0)
 
         ev1 = sim.step(InputFrame(interact=True))
         self.assertTrue(any(e["name"] == "deposit" for e in ev1))
-        self.assertTrue(any(e["name"] == "lantern_lit" for e in ev1))
+        lit_evs = [e for e in ev1 if e["name"] == "lantern_lit"]
+        self.assertEqual(len(lit_evs), 1)
+        self.assertEqual(lit_evs[0]["data"], {"lantern_id": "L1", "relight": False})
         self.assertTrue(sim.lanterns[0].lit)
+        self.assertEqual(sim.lanterns[0].fuel_60, 6000)
+        self.assertTrue(sim.lanterns[0].ever_lit)
+        self.assertEqual(sim.player_capacity(), 12)
         self.assertEqual(sim.player.carried, tuning.carry_capacity - tuning.lantern_cost)
+        # Ticket-03 scoring: +5 per deposited mote + 100 first light = 150
         self.assertEqual(
             sim.score,
             tuning.lantern_cost * tuning.score.per_mote + tuning.score.per_lantern,
         )
 
-        # Hold interact across next tick: no second deposit; remaining 2 motes get picked up
+        # Hold interact across next tick: no second deposit/refuel; remaining 2 motes get picked up
         ev2 = sim.step(InputFrame(interact=True))
-        self.assertFalse(any(e["name"] == "deposit" for e in ev2))
+        self.assertFalse(any(e["name"] in ("deposit", "refuel") for e in ev2))
         self.assertEqual(sim.player.carried, tuning.carry_capacity - tuning.lantern_cost + 2)
 
     def test_pulse_3d_distance_15_tick_push_and_cooldown(self) -> None:
@@ -118,6 +128,7 @@ class TestPhase1Core(unittest.TestCase):
         self.assertEqual(pulse_evs[0]["data"]["stunned_ids"], ["S1"])
         self.assertEqual(sim.shades[0].state, "stunned")
         self.assertEqual(sim.player.carried, 6 - tuning.pulse_cost)
+        self.assertEqual(sim.score, tuning.score.per_stun)
 
         # Over 15 ticks, shade is pushed ~4m outward
         for _ in range(16):
@@ -140,9 +151,13 @@ class TestPhase1Core(unittest.TestCase):
         )
         snap = sim.snapshot()
         self.assertEqual(snap["score"], 0)
+        self.assertEqual(snap["player"]["capacity"], 10)  # Pre-lit scenario lantern does not increase capacity
         self.assertEqual([m["id"] for m in snap["motes"]], ["M1", "M2"])
         self.assertTrue(snap["lanterns"][0]["lit"])
+        self.assertEqual(snap["lanterns"][0]["fuel"], 100.0)
+        self.assertTrue(snap["lanterns"][0]["ever_lit"])
         self.assertFalse(snap["lanterns"][1]["lit"])
+        self.assertEqual(snap["lanterns"][1]["fuel"], 0)
         self.assertEqual(snap["lanterns"][2]["deposited"], 2)
         self.assertFalse(snap["lanterns"][2]["lit"])
 

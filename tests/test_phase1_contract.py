@@ -1,4 +1,4 @@
-"""Subprocess regression tests verifying Test Contract v1.1 compliance for Night 1."""
+"""Subprocess regression tests verifying Test Contract v1.2 compliance for Night 1."""
 
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ def parse_jsonl(path: Path) -> list[dict]:
 
 class TestPhase1Contract(unittest.TestCase):
     def test_win_scenario_full_flow_and_determinism(self) -> None:
+        """Updated for Ticket-03 (ADR-005): lighting 5/5 does not end early; wins dawn_survived at tick 300."""
         with tempfile.TemporaryDirectory() as tmp:
             out1 = Path(tmp) / "win1.jsonl"
             out2 = Path(tmp) / "win2.jsonl"
@@ -49,8 +50,10 @@ class TestPhase1Contract(unittest.TestCase):
             self.assertEqual(records[0]["tick"], 0)
             self.assertEqual(records[0]["night"], 1)
             self.assertEqual(records[0]["score"], 0)
+            self.assertEqual(records[0]["player"]["capacity"], 10)
             self.assertEqual(records[-1]["type"], "end")
             self.assertEqual(records[-1]["state"], "won")
+            self.assertEqual(records[-1]["ticks"], 300)
             self.assertGreater(records[-1]["score"], 0)
 
             event_names = [r["name"] for r in records if r["type"] == "event"]
@@ -61,8 +64,13 @@ class TestPhase1Contract(unittest.TestCase):
             self.assertIn("lantern_lit", event_names)
             self.assertEqual(event_names[-1], "game_over")
 
+            lit_ev = [r for r in records if r["type"] == "event" and r["name"] == "lantern_lit"][0]
+            self.assertEqual(lit_ev["data"], {"lantern_id": "L1", "relight": False})
+            # Confirm lighting all 5 lanterns did NOT end the night early
+            self.assertLess(lit_ev["tick"], 300)
+
             game_over = [r for r in records if r["type"] == "event" and r["name"] == "game_over"][0]
-            self.assertEqual(game_over["data"], {"result": "won", "reason": "all_lit"})
+            self.assertEqual(game_over["data"], {"result": "won", "reason": "dawn_survived"})
 
     def test_lose_no_flames_and_drop_ratio(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -132,7 +140,6 @@ class TestPhase1Contract(unittest.TestCase):
             self.assertEqual(r1.returncode, 0)
             self.assertEqual(r2.returncode, 0)
             self.assertEqual(out1.read_bytes(), out2.read_bytes())
-            # Standardized Night 1 spawns 2 shades at tick 300
             records = parse_jsonl(out1)
             spawn_evs = [r for r in records if r["type"] == "event" and r["name"] == "shade_spawned"]
             self.assertEqual([e["data"]["id"] for e in spawn_evs], ["S1", "S2"])

@@ -31,7 +31,9 @@ REQUIRED_TUNING_KEYS = {
     "dash_duration_s",
     "dash_cooldown_s",
     "carry_capacity",
+    "capacity_max",
     "lantern_cost",
+    "relight_cost",
     "lantern_count_night1",
     "pickup_radius",
     "interact_radius",
@@ -50,6 +52,12 @@ REQUIRED_TUNING_KEYS = {
     "shade_speed",
     "shade_hit_radius",
     "fall_enabled",
+    "fuel_max",
+    "fuel_decay_per_s",
+    "fuel_per_mote",
+    "win_ratio",
+    "drain_per_s",
+    "low_fuel_threshold",
     "score",
 }
 
@@ -77,15 +85,16 @@ def _run_contract_check() -> tuple[bool, str]:
     missing_top = {"contract_version", "team", "build_cmd", "run_cmd", "headless_cmd", "tuning"} - set(data)
     if missing_top:
         return False, f"game.contract.json missing top-level keys: {sorted(missing_top)}"
-    if data["contract_version"] != "1.1":
-        return False, f"Expected contract_version '1.1', got '{data['contract_version']}'"
+    if data["contract_version"] != "1.2":
+        return False, f"Expected contract_version '1.2', got '{data['contract_version']}'"
     missing_tuning = REQUIRED_TUNING_KEYS - set(data["tuning"])
     if missing_tuning:
         return False, f"game.contract.json missing tuning keys: {sorted(missing_tuning)}"
 
+    t = data["tuning"]
     return True, (
         f"contract_version={data['contract_version']}, team={data['team']}, "
-        f"dash_speed={data['tuning']['dash_speed']}, fall_enabled={data['tuning']['fall_enabled']}"
+        f"fuel_max={t['fuel_max']}, win_ratio={t['win_ratio']}, capacity_max={t['capacity_max']}"
     )
 
 
@@ -110,13 +119,33 @@ def _run_headless_determinism() -> tuple[bool, str]:
         tmp_dir = Path(tmp)
         cases = [
             (
-                "night1_win",
+                "night1_dawn_win",
                 [
                     sys.executable, "run.py", "headless",
                     "--seed", "42", "--night", "1",
                     "--scenario", str(scenarios_dir / "win_scenario.json"),
                     "--inputs", str(scenarios_dir / "win_inputs.json"),
                     "--ticks", "600",
+                ],
+            ),
+            (
+                "night1_p3_fuel_relight",
+                [
+                    sys.executable, "run.py", "headless",
+                    "--seed", "42", "--night", "1",
+                    "--scenario", str(scenarios_dir / "p3_fuel_relight_refuel_scenario.json"),
+                    "--inputs", str(scenarios_dir / "p3_fuel_relight_refuel_inputs.json"),
+                    "--ticks", "700",
+                ],
+            ),
+            (
+                "night1_p3_shade_drain",
+                [
+                    sys.executable, "run.py", "headless",
+                    "--seed", "42", "--night", "1",
+                    "--scenario", str(scenarios_dir / "p3_shade_drain_scenario.json"),
+                    "--inputs", str(scenarios_dir / "p3_shade_drain_inputs.json"),
+                    "--ticks", "400",
                 ],
             ),
             (
@@ -186,7 +215,7 @@ def _run_full_night_benchmark() -> tuple[bool, str]:
         end_rec = json.loads(lines[-1])
         ok = elapsed <= 30.0 and end_rec.get("ticks") == 21600
         return ok, (
-            f"Night 3 full {end_rec.get('ticks')}-tick headless (with motes+shades+drifters+wind) "
+            f"Night 3 stress {end_rec.get('ticks')}-tick headless (with motes+shades+drifters+wind+fuel) "
             f"completed in {elapsed:.3f}s (limit <= 30.0s), lines={len(lines)}"
         )
 
@@ -244,10 +273,10 @@ def _run_secret_scan() -> tuple[bool, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract v1.1, tests, determinism, and perf.")
+    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract v1.2, tests, determinism, and perf.")
     parser.add_argument("--quick", action="store_true", help="Run fast gate checks (for pre-commit/hooks)")
     parser.add_argument("--ci", action="store_true", help="Run CI verification with environment metadata")
-    parser.add_argument("--phase", default="phase-2", help="Phase name for proof directory (default: phase-2)")
+    parser.add_argument("--phase", default="phase-3", help="Phase name for proof directory (default: phase-3)")
     parser.add_argument("--write-proof", action="store_true", help="Write raw output to docs/proof/<phase>/verify-output.txt")
     args = parser.parse_args(argv)
 
@@ -256,9 +285,9 @@ def main(argv: list[str] | None = None) -> int:
     git_rev = _git_head_short()
 
     checks = [
-        ("Test Contract v1.1 Schema (game.contract.json)", _run_contract_check),
-        ("Unit, Regression & Phase 2 Tests (unittest)", _run_unit_tests),
-        ("3-Night Headless Determinism (SHA-256 x2)", _run_headless_determinism),
+        ("Test Contract v1.2 Schema (game.contract.json)", _run_contract_check),
+        ("Unit, Regression & Phase 3 Tests (unittest)", _run_unit_tests),
+        ("3-Night + Phase 3 Headless Determinism (SHA-256 x2)", _run_headless_determinism),
     ]
     if not args.quick:
         checks.append(("Full-Night Headless Benchmark (21,600 ticks <= 30s)", _run_full_night_benchmark))

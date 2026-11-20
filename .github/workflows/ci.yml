@@ -22,12 +22,13 @@ jobs:
       - name: Run full verification gate
         run: python3 scripts/verify.py --ci
 
-      - name: Verify Test Contract v1.1 headless CLI (Nights 1-3)
+      - name: Verify Test Contract v1.2 headless CLI (Nights 1-3 + Phase 3)
         run: |
           python3 run.py headless --seed 42 --night 1 --scenario tests/scenarios/win_scenario.json --inputs tests/scenarios/win_inputs.json --ticks 600 --out /tmp/n1.jsonl
+          python3 run.py headless --seed 42 --night 1 --scenario tests/scenarios/p3_fuel_relight_refuel_scenario.json --inputs tests/scenarios/p3_fuel_relight_refuel_inputs.json --ticks 700 --out /tmp/p3_fuel.jsonl
           python3 run.py headless --seed 42 --night 2 --scenario tests/scenarios/p2_night2_pad_charm_drifter_scenario.json --inputs tests/scenarios/p2_night2_pad_charm_drifter_inputs.json --ticks 80 --out /tmp/n2.jsonl
           python3 run.py headless --seed 42 --night 3 --scenario tests/scenarios/p2_night3_tiers_wind_scenario.json --inputs tests/scenarios/p2_night3_tiers_wind_inputs.json --ticks 80 --out /tmp/n3.jsonl
-          tail -n 1 /tmp/n1.jsonl /tmp/n2.jsonl /tmp/n3.jsonl
+          tail -n 1 /tmp/n1.jsonl /tmp/p3_fuel.jsonl /tmp/n2.jsonl /tmp/n3.jsonl
 
       - name: Live HTTP server smoke test
         run: |
@@ -41,6 +42,7 @@ jobs:
                           assert resp.status == 200
                           data = json.loads(resp.read().decode("utf-8"))
                           assert data["status"] == "ok", data
+                          assert data["contract_version"] == "1.2", data
                           print("Live HTTP /health OK:", data)
                           break
                   except Exception:
