@@ -1,4 +1,4 @@
-"""Zero-dependency HTTP server serving the 3D WebGL2 game and 3-Night campaign API."""
+"""Zero-dependency HTTP server serving the 3D WebGL2 game and 3-Night campaign API (v1.2)."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from dataclasses import asdict
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import math
 from pathlib import Path
 import threading
 from typing import Any
@@ -38,17 +39,27 @@ class SimulationSession:
 
     def _payload(self, events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
         snap = self._sim.snapshot()
+        win_needed = math.ceil(self._tuning.win_ratio * len(self._sim.lanterns) - 1e-9)
         return {
             "snapshot": snap,
             "tuning": asdict(self._tuning),
             "meta": {
                 "map_name": self._sim.map_def.name,
                 "intro_quote": self._sim.map_def.intro_quote,
-                "campaign_score": self._campaign_score + (snap["score"] if self._sim.state == "won" and not self._night_banked else 0),
+                "win_needed": win_needed,
+                "campaign_score": self._campaign_score
+                + (snap["score"] if self._sim.state == "won" and not self._night_banked else 0),
                 "wind_warning": self._sim.wind_warning,
                 "facing_yaw_deg": round(self._sim.player.facing_yaw_deg, 2),
+                "shades_target": {s.id: s.target_lantern_id for s in self._sim.shades if s.target_lantern_id},
                 "ramps": [
-                    {"angle_deg": r.angle_deg, "inner_r": r.inner_r, "outer_r": r.outer_r, "half_width": r.half_width, "top_y": r.top_y}
+                    {
+                        "angle_deg": r.angle_deg,
+                        "inner_r": r.inner_r,
+                        "outer_r": r.outer_r,
+                        "half_width": r.half_width,
+                        "top_y": r.top_y,
+                    }
                     for r in self._sim.map_def.ramps
                 ],
                 "launch_pads": [
@@ -94,7 +105,6 @@ class SimulationSession:
             for i in range(steps):
                 if self._sim.state in ("won", "lost"):
                     break
-                # Edge inputs only on step 0 of multi-step frame batch
                 step_inp = inp if i == 0 else InputFrame(
                     move=inp.move,
                     cam_yaw_deg=inp.cam_yaw_deg,
@@ -152,7 +162,7 @@ def dispatch_request(
         if route == "/health":
             return _json_response(
                 HTTPStatus.OK,
-                {"status": "ok", "phase": "phase-2", "contract_version": "1.1"},
+                {"status": "ok", "phase": "phase-3", "contract_version": "1.2"},
             )
         if route == "/api/state":
             return _json_response(HTTPStatus.OK, session.state())
