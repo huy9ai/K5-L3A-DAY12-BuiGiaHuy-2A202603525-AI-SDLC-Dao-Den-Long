@@ -1,0 +1,22 @@
+# Bằng chứng kiểm chứng Phase 4 & Release v1.0.0 (TICKET-04 — Contract v1.3)
+
+- **Báo cáo chạy thật (31/31 tests, 5x SHA-256, bench/soak check, 21.600-tick benchmark):** [verify-output.txt](verify-output.txt)
+- **Đánh giá độc lập (Independent Review):** [review.md](review.md)
+- **Số đo Benchmark 1280×720 (`3s` warmup + `30s` đo) đã commit:** [bench.json](../../../bench.json)
+- **Số đo Soak Test 10 Đêm liên tiếp trong cùng tiến trình đã commit:** [soak.json](../../../soak.json)
+- **Ảnh chụp gameplay `1280×720` & Video Demo (`< 5` phút):** [preview.png](../../demo/preview.png) · [demo.mp4](../../demo/demo.mp4)
+- **Bản Retrospective tổng kết 4 Phase:** [retro.md](../../notes/retro.md)
+- **Quyết định thiết kế (ADR-006):** [decisions.md](../../notes/decisions.md)
+
+## Bảng truy vết Yêu cầu TICKET-04 & DoD → Bằng chứng
+
+| Yêu cầu (TICKET-04 & Contract v1.3) | Cách kiểm chứng | Bằng chứng | Kết quả |
+|---|---|---|---|
+| `game.contract.json` (`1.3`) thêm `bench_cmd` và `soak_cmd`, giữ nguyên mọi yêu cầu v1.0–v1.2 | Kiểm tra schema trong `scripts/verify.py` & `test_tuning_matches_contract_json` | [verify-output.txt](verify-output.txt), [game.contract.json](../../../game.contract.json) | DAT |
+| **1. Chế độ Benchmark:** `<bench_cmd> --seed 42 --duration 30 --out bench.json` (`1280×720`, Đêm 1, `200` Bóng Mực `wander`, `100` đom đóm, `3` đèn sáng `L1–L3` `fuel=100`, tắt sinh thêm/sát thương/nhặt/hao dầu/kết thúc Đêm & tắt hiệu ứng sáng tạo thêm, camera bay vòng `r=30m, Y=15m` từ `(30,15,0)` CCW `15s/vòng`, `3s` warmup + `30s` đo, tự thoát mã `0`) | Unit test cảnh bench + quỹ đạo camera + công thức `avg_fps`/`p1_low_fps`/`frame_ms_p95` + CLI subprocess test + chạy thật 30s sinh `bench.json` | [bench.json](../../../bench.json), `test_benchmark_scene_camera_orbit_and_metrics_formula`, `test_bench_cli_and_soak_cli` | DAT (`avg_fps >= 60`, `p1_low_fps >= 30`, `load_ms <= 10000`) |
+| **2. Soak Test:** `<soak_cmd> --seed 7 --nights 10 --out soak.json` (10 Đêm liên tiếp xoay vòng 1→2→3 trong cùng 1 tiến trình, `seed 7+i`, input ngẫu nhiên mỗi 30 tick đổi hướng, `5%` nhảy, `3%` lướt, `2%` tỏa sáng, `10%` tương tác, đo RSS `mem_start_mb` & `mem_end_mb`) | Chạy thật 10 Đêm sinh `soak.json` + CLI subprocess test trong `test_phase4_features.py` | [soak.json](../../../soak.json), `test_bench_cli_and_soak_cli` | DAT (`crashes = 0`, `mem_end_mb = 26.19 <= 1.2 * 26.14`) |
+| **3. Bảng xếp hạng cục bộ:** Lưu top 10 trên đĩa (`name` 3–12 ký tự `[A-Za-z0-9_]` + tiếng Việt, `score`, `nights_won`, `achieved_at` ISO 8601 có múi giờ, `seed`), giảm dần theo `score` (bằng điểm ai đạt trước đứng trên); nhập tên sau thắng Đêm 3 hoặc thua bất kỳ Đêm nào; màn hình Bảng xếp hạng từ Menu chính; lệnh `<run_cmd> --export-leaderboard out.json` | Unit test lưu/đọc đĩa, tie-break thời gian, HTTP `/api/leaderboard` và CLI `--export-leaderboard` | `test_leaderboard_persistence_sorting_tiebreak_api_and_export_cli` | DAT |
+| **4. Dễ tiếp cận (Accessibility):** Đổi phím đủ 9 hành động + phát hiện trùng phím + nút "Khôi phục mặc định" + lưu bền; phụ đề & mũi tên mép màn hình chỉ Bóng Mực xuất hiện, gió, 10s cuối, đèn `< 30`; giảm chuyển động; cỡ chữ `>= 18px` ở `1280×720` + tùy chọn chữ lớn `×1.25` | Kiểm tra DOM/CSS/JS qua HTTP router trong `test_accessibility_and_bench_web_endpoints` | [index.html](../../../src/dao_den_long/web/static/index.html), [style.css](../../../src/dao_den_long/web/static/style.css), [app.js](../../../src/dao_den_long/web/static/app.js) | DAT |
+| **5. Đóng gói & Tài liệu:** Clone sạch chạy `<= 3` lệnh; `README.md` có ảnh chụp, hướng dẫn đầy đủ; `CHANGELOG.md` đủ 4 phase; `CREDITS.md` & `LICENSE` đầy đủ | Đối chiếu từng file tại gốc repo | [README.md](../../../README.md), [CHANGELOG.md](../../../CHANGELOG.md), [CREDITS.md](../../../CREDITS.md), [LICENSE](../../../LICENSE) | DAT |
+| **6. Hồi quy Phase 1–3 & Tính tất định:** Toàn bộ test Phase 1–3 còn hiệu lực vẫn đạt (`31/31` test PASS, 0 skip); 5 kịch bản SHA-256 x2 khớp tuyệt đối | Chạy `python scripts/verify.py --phase phase-4 --write-proof` và `pytest -v` | [verify-output.txt](verify-output.txt) | DAT |
+| **7. Retro & Video Demo:** Bản retro tổng kết 4 phase (`docs/notes/retro.md`), video demo `.mp4` dưới 5 phút (`docs/demo/demo.mp4`), tag `phase-4` & GitHub Release `v1.0.0` | Đối chiếu file `retro.md`, `demo.mp4`, git tag & GitHub Release | [retro.md](../../notes/retro.md), [demo.mp4](../../demo/demo.mp4), [review.md](review.md) | DAT |
