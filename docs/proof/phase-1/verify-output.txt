@@ -1,0 +1,39 @@
+=== DAO DEN LONG VERIFICATION REPORT ===
+Timestamp (UTC): 2026-11-20T08:42:42Z
+Mode: standard
+Phase: phase-1
+Git HEAD: 77dd7af
+Python: 3.14.10 (C:\Users\nhoch\AppData\Local\Programs\Python\Python314\python.exe)
+Platform: Windows-11-10.0.26300-SP0
+
+--- [PASS] Test Contract v1.0 Schema (game.contract.json) ---
+contract_version=1.0, team=2A202603525-BuiGiaHuy, lanterns=5, headless_cmd='python3 run.py headless'
+
+--- [PASS] Unit & Contract Tests (unittest) ---
+test_default_night1_determinism_without_scenario (test_phase1_contract.TestPhase1Contract.test_default_night1_determinism_without_scenario) ... ok
+test_invalid_inputs_and_scenarios_exit_code_2 (test_phase1_contract.TestPhase1Contract.test_invalid_inputs_and_scenarios_exit_code_2) ... ok
+test_lit_lantern_safe_radius_blocks_shade (test_phase1_contract.TestPhase1Contract.test_lit_lantern_safe_radius_blocks_shade) ... ok
+test_lose_dawn (test_phase1_contract.TestPhase1Contract.test_lose_dawn) ... ok
+test_lose_no_flames_and_drop_ratio (test_phase1_contract.TestPhase1Contract.test_lose_no_flames_and_drop_ratio) ... ok
+test_win_scenario_full_flow_and_determinism (test_phase1_contract.TestPhase1Contract.test_win_scenario_full_flow_and_determinism) ... ok
+test_jump_rising_edge_and_gravity (test_phase1_core.TestPhase1Core.test_jump_rising_edge_and_gravity) ... ok
+test_movement_yaw_and_vector_normalization (test_phase1_core.TestPhase1Core.test_movement_yaw_and_vector_normalization) ... ok
+test_pickup_capacity_and_rising_edge_deposit (test_phase1_core.TestPhase1Core.test_pickup_capacity_and_rising_edge_deposit) ... ok
+test_pulse_stuns_pushes_and_enforces_cooldown (test_phase1_core.TestPhase1Core.test_pulse_stuns_pushes_and_enforces_cooldown) ... ok
+test_scenario_setup_emits_no_score_and_preserves_other_lanterns (test_phase1_core.TestPhase1Core.test_scenario_setup_emits_no_score_and_preserves_other_lanterns) ... ok
+test_tuning_matches_contract_json (test_phase1_core.TestPhase1Core.test_tuning_matches_contract_json) ... ok
+test_web_routes_gameplay_tick_and_reset (test_phase1_web.TestPhase1Web.test_web_routes_gameplay_tick_and_reset) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 2.678s
+
+OK
+
+--- [PASS] Headless Determinism (SHA-256 x2) ---
+[win_scenario] SHA-256=f1499fcfa3874fb7949f12fe8151cee96f87c530c84964104c16eded6e2db98b | lines=35 | end=(state=won, ticks=226, score=2090)
+[default_night1] SHA-256=f2b56ce71daeccbdb4dc99fe77c377958ee75f9f5dda88fc7a3542aa1064991c | lines=32 | end=(state=playing, ticks=300, score=0)
+
+--- [PASS] Secret & Hygiene Scan ---
+Scanned 53 text files; 0 env files or secret key patterns found.
+
+OVERALL RESULT: PASS
