@@ -50,6 +50,7 @@ class SimulationSession:
         self.bench_client_connected = False
         self.bench_first_frame_ms: float | None = None
         self.bench_result: dict[str, Any] | None = None
+        self.demo_capture_result: dict[str, Any] | None = None
 
     def _bank_if_won(self) -> None:
         if self._sim.state == "won" and not self._night_banked:
@@ -251,6 +252,9 @@ def dispatch_request(
                 parsed_body["load_ms"] = session.bench_first_frame_ms
             session.bench_result = parsed_body
             return _json_response(HTTPStatus.OK, {"status": "recorded"})
+        if route == "/api/demo_capture_done":
+            session.demo_capture_result = parsed_body
+            return _json_response(HTTPStatus.OK, {"status": "captured"})
         if route == "/api/leaderboard":
             name = parsed_body.get("name")
             score = parsed_body.get("score", session._campaign_score)
@@ -310,7 +314,7 @@ class _LanternRequestHandler(BaseHTTPRequestHandler):
         if method == "POST":
             length = int(self.headers.get("Content-Length", "0") or 0)
             if length > 0:
-                req_body = self.rfile.read(min(length, 524288))
+                req_body = self.rfile.read(min(length, 32 * 1024 * 1024))
 
         status, content_type, resp_body = dispatch_request(
             self.server.session, method, self.path, req_body

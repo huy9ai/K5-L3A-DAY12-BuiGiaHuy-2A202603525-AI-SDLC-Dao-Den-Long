@@ -1,8 +1,8 @@
 === DAO DEN LONG VERIFICATION REPORT ===
-Timestamp (UTC): 2026-11-20T10:16:54Z
+Timestamp (UTC): 2026-11-20T10:59:00Z
 Mode: standard
 Phase: phase-4
-Git HEAD: 4c02656
+Git HEAD: 6dd4137
 Python: 3.14.10 (C:\Users\nhoch\AppData\Local\Programs\Python\Python314\python.exe)
 Platform: Windows-11-10.0.26300-SP0
 
@@ -44,7 +44,7 @@ test_benchmark_scene_camera_orbit_and_metrics_formula (test_phase4_features.Test
 test_leaderboard_persistence_sorting_tiebreak_api_and_export_cli (test_phase4_features.TestPhase4Features.test_leaderboard_persistence_sorting_tiebreak_api_and_export_cli) ... ok
 
 ----------------------------------------------------------------------
-Ran 31 tests in 14.740s
+Ran 31 tests in 14.663s
 
 OK
 
@@ -59,9 +59,9 @@ OK
 bench.json: avg_fps=345.4, p1_low_fps=183.1, frame_ms_p95=3.29ms, frames=10337, load_ms=4152.2ms, peak_mem_mb=29.1MB | soak.json: nights=10, crashes=0, mem=26.14->26.19MB, duration_s=1.72s
 
 --- [PASS] Full-Night Headless Benchmark (21,600 ticks <= 30s) ---
-Night 3 stress 21600-tick headless (with motes+shades+drifters+wind+fuel) completed in 2.009s (limit <= 30.0s), lines=2174
+Night 3 stress 21600-tick headless (with motes+shades+drifters+wind+fuel) completed in 1.976s (limit <= 30.0s), lines=2174
 
 --- [PASS] Secret & Hygiene Scan ---
-Scanned 82 text files; 0 env files or secret key patterns found.
+Scanned 84 text files; 0 env files or secret key patterns found.
 
 OVERALL RESULT: PASS
