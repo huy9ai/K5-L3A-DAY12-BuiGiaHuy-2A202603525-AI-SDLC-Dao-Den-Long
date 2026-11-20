@@ -1,4 +1,4 @@
-"""Single-command verification gate and real proof generator."""
+"""Single-command verification gate, 3-Night determinism check, benchmark, and proof generator."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
@@ -26,6 +27,9 @@ IGNORED_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "venv", "node_m
 
 REQUIRED_TUNING_KEYS = {
     "player_speed",
+    "dash_speed",
+    "dash_duration_s",
+    "dash_cooldown_s",
     "carry_capacity",
     "lantern_cost",
     "lantern_count_night1",
@@ -34,6 +38,8 @@ REQUIRED_TUNING_KEYS = {
     "pulse_cost",
     "pulse_radius",
     "night1_duration_s",
+    "night2_duration_s",
+    "night3_duration_s",
     "flames",
     "invuln_s",
     "hit_drop_ratio",
@@ -71,14 +77,15 @@ def _run_contract_check() -> tuple[bool, str]:
     missing_top = {"contract_version", "team", "build_cmd", "run_cmd", "headless_cmd", "tuning"} - set(data)
     if missing_top:
         return False, f"game.contract.json missing top-level keys: {sorted(missing_top)}"
+    if data["contract_version"] != "1.1":
+        return False, f"Expected contract_version '1.1', got '{data['contract_version']}'"
     missing_tuning = REQUIRED_TUNING_KEYS - set(data["tuning"])
     if missing_tuning:
         return False, f"game.contract.json missing tuning keys: {sorted(missing_tuning)}"
 
     return True, (
         f"contract_version={data['contract_version']}, team={data['team']}, "
-        f"lanterns={data['tuning']['lantern_count_night1']}, "
-        f"headless_cmd='{data['headless_cmd']}'"
+        f"dash_speed={data['tuning']['dash_speed']}, fall_enabled={data['tuning']['fall_enabled']}"
     )
 
 
@@ -103,7 +110,7 @@ def _run_headless_determinism() -> tuple[bool, str]:
         tmp_dir = Path(tmp)
         cases = [
             (
-                "win_scenario",
+                "night1_win",
                 [
                     sys.executable, "run.py", "headless",
                     "--seed", "42", "--night", "1",
@@ -113,11 +120,23 @@ def _run_headless_determinism() -> tuple[bool, str]:
                 ],
             ),
             (
-                "default_night1",
+                "night2_drifter_charm",
                 [
                     sys.executable, "run.py", "headless",
-                    "--seed", "777", "--night", "1",
-                    "--ticks", "300",
+                    "--seed", "42", "--night", "2",
+                    "--scenario", str(scenarios_dir / "p2_night2_pad_charm_drifter_scenario.json"),
+                    "--inputs", str(scenarios_dir / "p2_night2_pad_charm_drifter_inputs.json"),
+                    "--ticks", "80",
+                ],
+            ),
+            (
+                "night3_ramp_wind",
+                [
+                    sys.executable, "run.py", "headless",
+                    "--seed", "42", "--night", "3",
+                    "--scenario", str(scenarios_dir / "p2_night3_tiers_wind_scenario.json"),
+                    "--inputs", str(scenarios_dir / "p2_night3_tiers_wind_inputs.json"),
+                    "--ticks", "80",
                 ],
             ),
         ]
@@ -146,6 +165,30 @@ def _run_headless_determinism() -> tuple[bool, str]:
             )
 
     return True, "\n".join(lines)
+
+
+def _run_full_night_benchmark() -> tuple[bool, str]:
+    perf_scenario = ROOT_DIR / "tests" / "scenarios" / "p2_perf_21600_scenario.json"
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "bench_n3.jsonl"
+        cmd = [
+            sys.executable, "run.py", "headless",
+            "--seed", "42", "--night", "3",
+            "--scenario", str(perf_scenario),
+            "--ticks", "21600", "--out", str(out),
+        ]
+        t0 = time.perf_counter()
+        proc = subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, check=False)
+        elapsed = time.perf_counter() - t0
+        if proc.returncode != 0:
+            return False, proc.stderr.decode("utf-8", errors="replace")
+        lines = out.read_text(encoding="utf-8").splitlines()
+        end_rec = json.loads(lines[-1])
+        ok = elapsed <= 30.0 and end_rec.get("ticks") == 21600
+        return ok, (
+            f"Night 3 full {end_rec.get('ticks')}-tick headless (with motes+shades+drifters+wind) "
+            f"completed in {elapsed:.3f}s (limit <= 30.0s), lines={len(lines)}"
+        )
 
 
 def _collect_repo_files() -> list[Path]:
@@ -201,10 +244,10 @@ def _run_secret_scan() -> tuple[bool, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract, tests, determinism, and hygiene.")
+    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract v1.1, tests, determinism, and perf.")
     parser.add_argument("--quick", action="store_true", help="Run fast gate checks (for pre-commit/hooks)")
     parser.add_argument("--ci", action="store_true", help="Run CI verification with environment metadata")
-    parser.add_argument("--phase", default="phase-1", help="Phase name for proof directory (default: phase-1)")
+    parser.add_argument("--phase", default="phase-2", help="Phase name for proof directory (default: phase-2)")
     parser.add_argument("--write-proof", action="store_true", help="Write raw output to docs/proof/<phase>/verify-output.txt")
     args = parser.parse_args(argv)
 
@@ -213,11 +256,13 @@ def main(argv: list[str] | None = None) -> int:
     git_rev = _git_head_short()
 
     checks = [
-        ("Test Contract v1.0 Schema (game.contract.json)", _run_contract_check),
-        ("Unit & Contract Tests (unittest)", _run_unit_tests),
-        ("Headless Determinism (SHA-256 x2)", _run_headless_determinism),
-        ("Secret & Hygiene Scan", _run_secret_scan),
+        ("Test Contract v1.1 Schema (game.contract.json)", _run_contract_check),
+        ("Unit, Regression & Phase 2 Tests (unittest)", _run_unit_tests),
+        ("3-Night Headless Determinism (SHA-256 x2)", _run_headless_determinism),
     ]
+    if not args.quick:
+        checks.append(("Full-Night Headless Benchmark (21,600 ticks <= 30s)", _run_full_night_benchmark))
+    checks.append(("Secret & Hygiene Scan", _run_secret_scan))
 
     all_passed = True
     sections: list[str] = [
