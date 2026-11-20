@@ -1,4 +1,4 @@
-"""Single-command verification gate, 3-Night determinism check, benchmark, and proof generator."""
+"""Single-command verification gate, 3-Night determinism check, benchmark, soak check, and proof generator (v1.3)."""
 
 from __future__ import annotations
 
@@ -24,6 +24,17 @@ SECRET_PATTERNS = (
 )
 
 IGNORED_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules"}
+
+REQUIRED_TOP_KEYS = {
+    "contract_version",
+    "team",
+    "build_cmd",
+    "run_cmd",
+    "headless_cmd",
+    "bench_cmd",
+    "soak_cmd",
+    "tuning",
+}
 
 REQUIRED_TUNING_KEYS = {
     "player_speed",
@@ -82,11 +93,11 @@ def _run_contract_check() -> tuple[bool, str]:
     except (OSError, json.JSONDecodeError) as exc:
         return False, f"Invalid game.contract.json: {exc}"
 
-    missing_top = {"contract_version", "team", "build_cmd", "run_cmd", "headless_cmd", "tuning"} - set(data)
+    missing_top = REQUIRED_TOP_KEYS - set(data)
     if missing_top:
         return False, f"game.contract.json missing top-level keys: {sorted(missing_top)}"
-    if data["contract_version"] != "1.2":
-        return False, f"Expected contract_version '1.2', got '{data['contract_version']}'"
+    if data["contract_version"] != "1.3":
+        return False, f"Expected contract_version '1.3', got '{data['contract_version']}'"
     missing_tuning = REQUIRED_TUNING_KEYS - set(data["tuning"])
     if missing_tuning:
         return False, f"game.contract.json missing tuning keys: {sorted(missing_tuning)}"
@@ -94,6 +105,7 @@ def _run_contract_check() -> tuple[bool, str]:
     t = data["tuning"]
     return True, (
         f"contract_version={data['contract_version']}, team={data['team']}, "
+        f"bench_cmd='{data['bench_cmd']}', soak_cmd='{data['soak_cmd']}', "
         f"fuel_max={t['fuel_max']}, win_ratio={t['win_ratio']}, capacity_max={t['capacity_max']}"
     )
 
@@ -220,6 +232,54 @@ def _run_full_night_benchmark() -> tuple[bool, str]:
         )
 
 
+def _run_bench_and_soak_artifacts_check() -> tuple[bool, str]:
+    bench_path = ROOT_DIR / "bench.json"
+    soak_path = ROOT_DIR / "soak.json"
+    if not bench_path.is_file() or not soak_path.is_file():
+        return False, "Missing committed bench.json or soak.json at repository root."
+
+    try:
+        b = json.loads(bench_path.read_text(encoding="utf-8"))
+        s = json.loads(soak_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return False, f"Invalid bench.json or soak.json: {exc}"
+
+    req_b = {
+        "contract_version",
+        "avg_fps",
+        "p1_low_fps",
+        "frame_ms_p95",
+        "frames",
+        "load_ms",
+        "peak_mem_mb",
+        "vsync_off",
+        "renderer",
+        "os",
+    }
+    if req_b - set(b):
+        return False, f"bench.json missing keys: {sorted(req_b - set(b))}"
+    if b["contract_version"] != "1.3":
+        return False, f"bench.json contract_version={b['contract_version']} != 1.3"
+    if float(b["avg_fps"]) < 60.0 or float(b["p1_low_fps"]) < 30.0 or float(b["load_ms"]) > 10000.0:
+        return False, f"bench.json below threshold: {b}"
+
+    req_s = {"nights", "crashes", "results", "mem_start_mb", "mem_end_mb", "duration_s"}
+    if req_s - set(s):
+        return False, f"soak.json missing keys: {sorted(req_s - set(s))}"
+    if int(s["nights"]) != 10 or int(s["crashes"]) != 0 or len(s["results"]) != 10:
+        return False, f"soak.json invalid night results: {s}"
+    if float(s["mem_end_mb"]) > 1.2 * float(s["mem_start_mb"]):
+        return False, f"soak.json memory growth exceeded 1.2x: {s}"
+
+    return True, (
+        f"bench.json: avg_fps={b['avg_fps']}, p1_low_fps={b['p1_low_fps']}, "
+        f"frame_ms_p95={b['frame_ms_p95']}ms, frames={b['frames']}, load_ms={b['load_ms']}ms, "
+        f"peak_mem_mb={b['peak_mem_mb']}MB | "
+        f"soak.json: nights={s['nights']}, crashes={s['crashes']}, "
+        f"mem={s['mem_start_mb']}->{s['mem_end_mb']}MB, duration_s={s['duration_s']}s"
+    )
+
+
 def _collect_repo_files() -> list[Path]:
     tracked = subprocess.run(
         ["git", "ls-files"],
@@ -254,7 +314,7 @@ def _run_secret_scan() -> tuple[bool, str]:
             issues.append(f"Forbidden env file present: {rel}")
             continue
 
-        if file_path.suffix.lower() in {".png", ".jpg", ".mp4", ".pyc", ".ico", ".zip"}:
+        if file_path.suffix.lower() in {".png", ".jpg", ".gif", ".mp4", ".pyc", ".ico", ".zip"}:
             continue
 
         scanned += 1
@@ -273,10 +333,10 @@ def _run_secret_scan() -> tuple[bool, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract v1.2, tests, determinism, and perf.")
+    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract v1.3, tests, determinism, bench/soak, and perf.")
     parser.add_argument("--quick", action="store_true", help="Run fast gate checks (for pre-commit/hooks)")
     parser.add_argument("--ci", action="store_true", help="Run CI verification with environment metadata")
-    parser.add_argument("--phase", default="phase-3", help="Phase name for proof directory (default: phase-3)")
+    parser.add_argument("--phase", default="phase-4", help="Phase name for proof directory (default: phase-4)")
     parser.add_argument("--write-proof", action="store_true", help="Write raw output to docs/proof/<phase>/verify-output.txt")
     args = parser.parse_args(argv)
 
@@ -285,9 +345,10 @@ def main(argv: list[str] | None = None) -> int:
     git_rev = _git_head_short()
 
     checks = [
-        ("Test Contract v1.2 Schema (game.contract.json)", _run_contract_check),
-        ("Unit, Regression & Phase 3 Tests (unittest)", _run_unit_tests),
+        ("Test Contract v1.3 Schema (game.contract.json)", _run_contract_check),
+        ("Unit, Regression & Phase 4 Tests (unittest)", _run_unit_tests),
         ("3-Night + Phase 3 Headless Determinism (SHA-256 x2)", _run_headless_determinism),
+        ("Committed bench.json & soak.json Threshold Check", _run_bench_and_soak_artifacts_check),
     ]
     if not args.quick:
         checks.append(("Full-Night Headless Benchmark (21,600 ticks <= 30s)", _run_full_night_benchmark))

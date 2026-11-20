@@ -25,8 +25,8 @@ class TestPhase1Web(unittest.TestCase):
         self.assertIn("application/json", ctype)
         health = json.loads(body.decode("utf-8"))
         self.assertEqual(health["status"], "ok")
-        self.assertEqual(health["phase"], "phase-3")
-        self.assertEqual(health["contract_version"], "1.2")
+        self.assertEqual(health["phase"], "phase-4")
+        self.assertEqual(health["contract_version"], "1.3")
 
         status, ctype, body = dispatch_request(session, "GET", "/")
         self.assertEqual(status, HTTPStatus.OK)

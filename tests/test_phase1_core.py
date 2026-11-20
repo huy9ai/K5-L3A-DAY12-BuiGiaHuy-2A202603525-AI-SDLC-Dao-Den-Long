@@ -25,7 +25,9 @@ class TestPhase1Core(unittest.TestCase):
     def test_tuning_matches_contract_json(self) -> None:
         raw = load_contract_data()
         tuning = load_tuning()
-        self.assertEqual(raw["contract_version"], "1.2")
+        self.assertEqual(raw["contract_version"], "1.3")
+        self.assertEqual(raw["bench_cmd"], "python3 run.py bench")
+        self.assertEqual(raw["soak_cmd"], "python3 run.py soak")
         self.assertEqual(tuning.lantern_count_night1, 5)
         self.assertEqual(tuning.night1_duration_s, 240)
         self.assertEqual(tuning.night2_duration_s, 270)
