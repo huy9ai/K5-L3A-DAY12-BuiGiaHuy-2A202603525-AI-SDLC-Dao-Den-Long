@@ -1,10 +1,9 @@
-"""Single-source-of-truth configuration loader synced with game.contract.json."""
+"""Single-source-of-truth configuration loader synced with game.contract.json (v1.1)."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-import math
 from pathlib import Path
 from typing import Any
 
@@ -13,15 +12,57 @@ DEFAULT_CONTRACT_PATH = ROOT_DIR / "game.contract.json"
 
 TICK_RATE = 60
 DT = 1.0 / TICK_RATE
-ISLAND_RADIUS = 50.0
-DEFAULT_LANTERN_RING_RADIUS = 25.0
-JUMP_VELOCITY = 7.5
+
+# Standardized Ticket-02 gameplay constants (60 Hz, meters, seconds, Y up)
+JUMP_VELOCITY = 7.0
 GRAVITY = 20.0
+FALL_Y_THRESHOLD = -10.0
+RESPAWN_WAIT_TICKS = 60
+INVULN_TICKS = 90
+
+SHADE_DETECT_RADIUS = 12.0
+SHADE_LEASH_RADIUS = 18.0
+SHADE_WANDER_SPEED = 2.0
+SHADE_SPAWN_TICKS = 30
+SHADE_RECOIL_DIST = 2.0
+SHADE_RECOIL_TICKS = 60
+SAFE_PUSHOUT_MAX_TICKS = 30
+VALID_SHADE_STATES = ("spawning", "wander", "chase", "recoil", "stunned")
+
+PULSE_CENTER_Y_OFFSET = 0.8
+PULSE_PUSH_TICKS = 15
+
+MOTE_INIT_COUNT = 20
+MOTE_CAP = 30
+MOTE_SPAWN_INTERVAL_TICKS = 240
+DROPPED_MOTE_TTL_TICKS = 480
+ENTITY_MAX_HEIGHT_DIFF = 1.5
+
+CHARM_SPEED = 7.2
+CHARM_DURATION_TICKS = 600
+CHARM_RESPAWN_TICKS = 2700
+
+DRIFTER_IDLE_SPEED = 2.0
+DRIFTER_CHASE_SPEED = 7.0
+DRIFTER_FLEE_SPEED = 7.0
+DRIFTER_DETECT_RADIUS = 15.0
+DRIFTER_STEAL_RADIUS = 1.2
+DRIFTER_STEAL_MIN_CARRIED = 5
+DRIFTER_STEAL_MAX = 3
+DRIFTER_FLEE_TICKS = 240
+DRIFTER_DROP_FLEE_TICKS = 120
+DRIFTER_SPAWN_INTERVAL_TICKS = 1200
+DRIFTER_MAX = 2
+
+WIND_INTERVAL_TICKS = 1800
+WIND_WARN_TICKS = 120
+WIND_DURATION_TICKS = 300
+WIND_PUSH_SPEED = 2.0
 
 
 @dataclass(frozen=True)
 class ScoreTuning:
-    """Scoring weights per Test Contract v1.0."""
+    """Scoring weights per Test Contract v1.1."""
 
     per_mote: int
     per_lantern: int
@@ -35,6 +76,9 @@ class TuningConfig:
     """Gameplay tuning parameters synced with game.contract.json."""
 
     player_speed: float
+    dash_speed: float
+    dash_duration_s: float
+    dash_cooldown_s: float
     carry_capacity: int
     lantern_cost: int
     lantern_count_night1: int
@@ -43,6 +87,8 @@ class TuningConfig:
     pulse_cost: int
     pulse_radius: float
     night1_duration_s: float
+    night2_duration_s: float
+    night3_duration_s: float
     flames: int
     invuln_s: float
     hit_drop_ratio: float
@@ -69,6 +115,9 @@ def load_tuning(contract_path: Path | None = None) -> TuningConfig:
     s = t["score"]
     return TuningConfig(
         player_speed=float(t["player_speed"]),
+        dash_speed=float(t["dash_speed"]),
+        dash_duration_s=float(t["dash_duration_s"]),
+        dash_cooldown_s=float(t["dash_cooldown_s"]),
         carry_capacity=int(t["carry_capacity"]),
         lantern_cost=int(t["lantern_cost"]),
         lantern_count_night1=int(t["lantern_count_night1"]),
@@ -77,6 +126,8 @@ def load_tuning(contract_path: Path | None = None) -> TuningConfig:
         pulse_cost=int(t["pulse_cost"]),
         pulse_radius=float(t["pulse_radius"]),
         night1_duration_s=float(t["night1_duration_s"]),
+        night2_duration_s=float(t["night2_duration_s"]),
+        night3_duration_s=float(t["night3_duration_s"]),
         flames=int(t["flames"]),
         invuln_s=float(t["invuln_s"]),
         hit_drop_ratio=float(t["hit_drop_ratio"]),
@@ -95,14 +146,3 @@ def load_tuning(contract_path: Path | None = None) -> TuningConfig:
             per_flame_left=int(s["per_flame_left"]),
         ),
     )
-
-
-def default_night1_lanterns(count: int = 5, radius: float = DEFAULT_LANTERN_RING_RADIUS) -> list[tuple[str, list[float]]]:
-    """Generate L1..LN evenly spaced around the island with L1 at (0, 0, radius)."""
-    lanterns: list[tuple[str, list[float]]] = []
-    for i in range(count):
-        angle = (2.0 * math.pi * i) / count
-        x = round(radius * math.sin(angle), 3)
-        z = round(radius * math.cos(angle), 3)
-        lanterns.append((f"L{i + 1}", [0.0 if x == 0.0 else x, 0.0, 0.0 if z == 0.0 else z]))
-    return lanterns

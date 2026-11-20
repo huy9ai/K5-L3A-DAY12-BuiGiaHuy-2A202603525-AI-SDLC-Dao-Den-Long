@@ -1,4 +1,4 @@
-"""Headless CLI runner conforming to Test Contract v1.0."""
+"""Headless CLI runner conforming to Test Contract v1.1 (Nights 1, 2, 3)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ import sys
 from typing import Any, Sequence
 
 from dao_den_long.core.config import load_tuning
-from dao_den_long.core.engine import InputFrame, Night1Simulation
+from dao_den_long.core.engine import GameSimulation, InputFrame
+from dao_den_long.core.maps import build_night_map
 from dao_den_long.headless.validation import (
     ContractInputError,
     load_and_validate_inputs,
@@ -26,16 +27,16 @@ def run_headless(
     scenario: dict[str, Any] | None = None,
     frames_by_tick: dict[int, dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
-    """Run deterministic Night simulation and return JSONL records."""
-    if night != 1:
-        raise ContractInputError(f"Unsupported --night {night}; Phase 1 supports --night 1 only")
+    """Run deterministic Night 1-3 simulation and return JSONL records."""
+    if night not in (1, 2, 3):
+        raise ContractInputError(f"Unsupported --night {night}; expected 1, 2, or 3")
     if ticks < 0:
         raise ContractInputError("--ticks must be >= 0")
     if snapshot_every < 1:
         raise ContractInputError("--snapshot-every must be >= 1")
 
     tuning = load_tuning()
-    sim = Night1Simulation(seed=seed, tuning=tuning, scenario=scenario)
+    sim = GameSimulation(seed=seed, night=night, tuning=tuning, scenario=scenario)
     frames = frames_by_tick or {}
 
     records: list[dict[str, Any]] = [sim.snapshot()]
@@ -43,9 +44,10 @@ def run_headless(
         "move": (0.0, 0.0),
         "cam_yaw_deg": 0.0,
         "jump": False,
+        "dash": False,
         "interact": False,
         "pulse": False,
-        "dash": False,
+        "pause": False,
     }
 
     for k in range(ticks):
@@ -55,7 +57,7 @@ def run_headless(
                 held["move"] = (float(frame["move"][0]), float(frame["move"][1]))
             if "cam_yaw_deg" in frame:
                 held["cam_yaw_deg"] = float(frame["cam_yaw_deg"])
-            for btn in ("jump", "interact", "pulse", "dash"):
+            for btn in ("jump", "dash", "interact", "pulse", "pause"):
                 if btn in frame:
                     held[btn] = bool(frame[btn])
 
@@ -63,16 +65,17 @@ def run_headless(
             move=held["move"],
             cam_yaw_deg=held["cam_yaw_deg"],
             jump=held["jump"],
+            dash=held["dash"],
             interact=held["interact"],
             pulse=held["pulse"],
-            dash=held["dash"],
+            pause=held["pause"],
         )
         events = sim.step(inp)
         records.extend(events)
 
-        if sim.state != "playing" or (sim.tick % snapshot_every == 0):
+        if sim.state in ("won", "lost") or (sim.tick % snapshot_every == 0):
             records.append(sim.snapshot())
-        if sim.state != "playing":
+        if sim.state in ("won", "lost"):
             break
 
     records.append(sim.end_record())
@@ -80,13 +83,13 @@ def run_headless(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entrypoint matching Test Contract v1.0 section B."""
+    """CLI entrypoint matching Test Contract v1.1."""
     parser = argparse.ArgumentParser(
         prog="run.py headless",
-        description="Run Dao Den Long in deterministic headless mode (Test Contract v1.0).",
+        description="Run Dao Den Long in deterministic headless mode (Test Contract v1.1).",
     )
     parser.add_argument("--seed", type=int, required=True, help="PRNG seed")
-    parser.add_argument("--night", type=int, required=True, help="Night number (1)")
+    parser.add_argument("--night", type=int, required=True, help="Night number (1, 2, or 3)")
     parser.add_argument("--scenario", type=Path, default=None, help="Optional scenario JSON path")
     parser.add_argument("--inputs", type=Path, default=None, help="Optional inputs JSON path")
     parser.add_argument("--ticks", type=int, required=True, help="Max ticks to simulate")
@@ -100,8 +103,8 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parsed = parser.parse_args(list(argv) if argv is not None else None)
 
-    if parsed.night != 1:
-        print(f"Error: unsupported --night {parsed.night} (expected 1)", file=sys.stderr)
+    if parsed.night not in (1, 2, 3):
+        print(f"Error: unsupported --night {parsed.night} (expected 1, 2, or 3)", file=sys.stderr)
         return 2
     if parsed.ticks < 0:
         print("Error: --ticks must be >= 0", file=sys.stderr)
@@ -111,9 +114,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
 
     try:
-        tuning = load_tuning()
+        map_def = build_night_map(parsed.night)
         scenario_data = (
-            load_and_validate_scenario(parsed.scenario, lantern_count=tuning.lantern_count_night1)
+            load_and_validate_scenario(parsed.scenario, lantern_count=len(map_def.lantern_spawns))
             if parsed.scenario is not None
             else None
         )

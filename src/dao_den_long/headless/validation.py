@@ -1,4 +1,4 @@
-"""Strict JSON schema validation for Test Contract v1.0 inputs and scenarios."""
+"""Strict JSON schema validation for Test Contract v1.1 inputs and scenarios."""
 
 from __future__ import annotations
 
@@ -7,9 +7,11 @@ import math
 from pathlib import Path
 from typing import Any
 
+from dao_den_long.core.config import VALID_SHADE_STATES
+
 
 class ContractInputError(ValueError):
-    """Raised when --inputs or --scenario fails Test Contract v1.0 validation (exit code 2)."""
+    """Raised when --inputs or --scenario fails Test Contract v1.1 validation (exit code 2)."""
 
 
 def _is_int(value: Any) -> bool:
@@ -48,7 +50,7 @@ def _read_json_dict(path: Path, kind: str) -> dict[str, Any]:
 
 
 def load_and_validate_inputs(path: Path) -> dict[int, dict[str, Any]]:
-    """Load and validate Test Contract v1.0 inputs JSON, keyed by tick."""
+    """Load and validate Test Contract v1.1 inputs JSON, keyed by tick."""
     data = _read_json_dict(path, "inputs")
     frames = data.get("frames")
     if not isinstance(frames, list):
@@ -81,7 +83,7 @@ def load_and_validate_inputs(path: Path) -> dict[int, dict[str, Any]]:
         if "cam_yaw_deg" in frame and not _is_num(frame["cam_yaw_deg"]):
             raise ContractInputError(f"frames[{idx}].cam_yaw_deg must be a finite number")
 
-        for btn in ("jump", "interact", "pulse", "dash"):
+        for btn in ("jump", "dash", "interact", "pulse", "pause"):
             if btn in frame and not isinstance(frame[btn], bool):
                 raise ContractInputError(f"frames[{idx}].{btn} must be a boolean")
 
@@ -91,7 +93,7 @@ def load_and_validate_inputs(path: Path) -> dict[int, dict[str, Any]]:
 
 
 def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, Any]:
-    """Load and validate Test Contract v1.0 scenario JSON."""
+    """Load and validate Test Contract v1.1 scenario JSON."""
     data = _read_json_dict(path, "scenario")
     valid_lantern_ids = {f"L{i + 1}" for i in range(lantern_count)}
 
@@ -101,12 +103,18 @@ def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, 
             raise ContractInputError("scenario.player must be an object")
         if "pos" in player:
             _validate_pos3(player["pos"], "scenario.player.pos")
-        if "carried" in player and (not _is_int(player["carried"]) or player["carried"] < 0):
-            raise ContractInputError("scenario.player.carried must be a non-negative integer")
-        if "flames" in player and (not _is_int(player["flames"]) or player["flames"] < 0):
-            raise ContractInputError("scenario.player.flames must be a non-negative integer")
+        for key in (
+            "carried",
+            "flames",
+            "invuln_ticks",
+            "dash_cd_ticks",
+            "pulse_cd_ticks",
+            "charm_ticks",
+        ):
+            if key in player and (not _is_int(player[key]) or player[key] < 0):
+                raise ContractInputError(f"scenario.player.{key} must be a non-negative integer")
 
-    for flag in ("random_motes", "random_shades"):
+    for flag in ("random_motes", "random_shades", "random_drifters", "wind_enabled"):
         if flag in data and not isinstance(data[flag], bool):
             raise ContractInputError(f"scenario.{flag} must be a boolean")
 
@@ -119,6 +127,11 @@ def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, 
         for idx, item in enumerate(data["motes"]):
             if isinstance(item, dict):
                 _validate_pos3(item.get("pos"), f"scenario.motes[{idx}].pos")
+                if "kind" in item and item["kind"] not in ("random", "dropped"):
+                    raise ContractInputError(f"scenario.motes[{idx}].kind must be 'random' or 'dropped'")
+                if "ttl_s" in item and item["ttl_s"] is not None:
+                    if not _is_num(item["ttl_s"]) or float(item["ttl_s"]) < 0.0:
+                        raise ContractInputError(f"scenario.motes[{idx}].ttl_s must be >= 0 or null")
             else:
                 _validate_pos3(item, f"scenario.motes[{idx}]")
 
@@ -128,8 +141,42 @@ def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, 
         for idx, item in enumerate(data["shades"]):
             if isinstance(item, dict):
                 _validate_pos3(item.get("pos"), f"scenario.shades[{idx}].pos")
+                if "state" in item and item["state"] not in VALID_SHADE_STATES:
+                    raise ContractInputError(
+                        f"scenario.shades[{idx}].state must be one of {VALID_SHADE_STATES}"
+                    )
+                if "state_ticks_left" in item and (not _is_int(item["state_ticks_left"]) or item["state_ticks_left"] < 0):
+                    raise ContractInputError(f"scenario.shades[{idx}].state_ticks_left must be >= 0")
             else:
                 _validate_pos3(item, f"scenario.shades[{idx}]")
+
+    if "drifters" in data:
+        if not isinstance(data["drifters"], list):
+            raise ContractInputError("scenario.drifters must be an array")
+        for idx, item in enumerate(data["drifters"]):
+            if isinstance(item, dict):
+                _validate_pos3(item.get("pos"), f"scenario.drifters[{idx}].pos")
+                if "state" in item and item["state"] not in ("idle", "chase", "flee", "removed"):
+                    raise ContractInputError(f"scenario.drifters[{idx}].state invalid")
+                if "stolen" in item and (not _is_int(item["stolen"]) or item["stolen"] < 0):
+                    raise ContractInputError(f"scenario.drifters[{idx}].stolen must be >= 0")
+                if "flee_ticks_left" in item and (not _is_int(item["flee_ticks_left"]) or item["flee_ticks_left"] < 0):
+                    raise ContractInputError(f"scenario.drifters[{idx}].flee_ticks_left must be >= 0")
+            else:
+                _validate_pos3(item, f"scenario.drifters[{idx}]")
+
+    if "charms" in data:
+        if not isinstance(data["charms"], list):
+            raise ContractInputError("scenario.charms must be an array")
+        for idx, item in enumerate(data["charms"]):
+            if not isinstance(item, dict):
+                raise ContractInputError(f"scenario.charms[{idx}] must be an object")
+            if "pos" in item:
+                _validate_pos3(item["pos"], f"scenario.charms[{idx}].pos")
+            if "available" in item and not isinstance(item["available"], bool):
+                raise ContractInputError(f"scenario.charms[{idx}].available must be boolean")
+            if "respawn_ticks" in item and (not _is_int(item["respawn_ticks"]) or item["respawn_ticks"] < 0):
+                raise ContractInputError(f"scenario.charms[{idx}].respawn_ticks must be >= 0")
 
     if "lanterns" in data:
         if not isinstance(data["lanterns"], list):
