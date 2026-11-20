@@ -1,4 +1,4 @@
-"""Headless CLI runner conforming to Test Contract v1.1 (Nights 1, 2, 3)."""
+"""Headless CLI runner conforming to Test Contract v1.2 (Nights 1, 2, 3)."""
 
 from __future__ import annotations
 
@@ -83,10 +83,10 @@ def run_headless(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entrypoint matching Test Contract v1.1."""
+    """CLI entrypoint matching Test Contract v1.2."""
     parser = argparse.ArgumentParser(
         prog="run.py headless",
-        description="Run Dao Den Long in deterministic headless mode (Test Contract v1.1).",
+        description="Run Dao Den Long in deterministic headless mode (Test Contract v1.2).",
     )
     parser.add_argument("--seed", type=int, required=True, help="PRNG seed")
     parser.add_argument("--night", type=int, required=True, help="Night number (1, 2, or 3)")

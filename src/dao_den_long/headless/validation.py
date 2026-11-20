@@ -1,4 +1,4 @@
-"""Strict JSON schema validation for Test Contract v1.1 inputs and scenarios."""
+"""Strict JSON schema validation for Test Contract v1.2 inputs and scenarios."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from dao_den_long.core.config import VALID_SHADE_STATES
 
 
 class ContractInputError(ValueError):
-    """Raised when --inputs or --scenario fails Test Contract v1.1 validation (exit code 2)."""
+    """Raised when --inputs or --scenario fails Test Contract v1.2 validation (exit code 2)."""
 
 
 def _is_int(value: Any) -> bool:
@@ -50,7 +50,7 @@ def _read_json_dict(path: Path, kind: str) -> dict[str, Any]:
 
 
 def load_and_validate_inputs(path: Path) -> dict[int, dict[str, Any]]:
-    """Load and validate Test Contract v1.1 inputs JSON, keyed by tick."""
+    """Load and validate Test Contract v1.2 inputs JSON, keyed by tick."""
     data = _read_json_dict(path, "inputs")
     frames = data.get("frames")
     if not isinstance(frames, list):
@@ -93,7 +93,7 @@ def load_and_validate_inputs(path: Path) -> dict[int, dict[str, Any]]:
 
 
 def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, Any]:
-    """Load and validate Test Contract v1.1 scenario JSON."""
+    """Load and validate Test Contract v1.2 scenario JSON."""
     data = _read_json_dict(path, "scenario")
     valid_lantern_ids = {f"L{i + 1}" for i in range(lantern_count)}
 
@@ -105,6 +105,7 @@ def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, 
             _validate_pos3(player["pos"], "scenario.player.pos")
         for key in (
             "carried",
+            "successful_lights",
             "flames",
             "invuln_ticks",
             "dash_cd_ticks",
@@ -147,6 +148,11 @@ def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, 
                     )
                 if "state_ticks_left" in item and (not _is_int(item["state_ticks_left"]) or item["state_ticks_left"] < 0):
                     raise ContractInputError(f"scenario.shades[{idx}].state_ticks_left must be >= 0")
+                if "target_lantern_id" in item and item["target_lantern_id"] is not None:
+                    if item["target_lantern_id"] not in valid_lantern_ids:
+                        raise ContractInputError(
+                            f"scenario.shades[{idx}].target_lantern_id must be one of {sorted(valid_lantern_ids)}"
+                        )
             else:
                 _validate_pos3(item, f"scenario.shades[{idx}]")
 
@@ -195,5 +201,12 @@ def load_and_validate_scenario(path: Path, lantern_count: int = 5) -> dict[str, 
                 raise ContractInputError(f"scenario.lanterns[{idx}].deposited must be >= 0")
             if "lit" in item and not isinstance(item["lit"], bool):
                 raise ContractInputError(f"scenario.lanterns[{idx}].lit must be a boolean")
+            if "ever_lit" in item and not isinstance(item["ever_lit"], bool):
+                raise ContractInputError(f"scenario.lanterns[{idx}].ever_lit must be a boolean")
+            if "relit_count" in item and (not _is_int(item["relit_count"]) or item["relit_count"] < 0):
+                raise ContractInputError(f"scenario.lanterns[{idx}].relit_count must be >= 0")
+            if "fuel" in item:
+                if not _is_num(item["fuel"]) or not (0.0 <= float(item["fuel"]) <= 100.0):
+                    raise ContractInputError(f"scenario.lanterns[{idx}].fuel must be in [0, 100]")
 
     return data

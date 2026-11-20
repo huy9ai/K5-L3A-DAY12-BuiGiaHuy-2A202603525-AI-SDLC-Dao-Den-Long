@@ -90,7 +90,8 @@ class MapDefinition:
         for ramp in self.ramps:
             s = x * ramp.ux + z * ramp.uz
             perp = abs(x * ramp.tx + z * ramp.tz)
-            if ramp.inner_r <= s <= ramp.outer_r and perp <= ramp.half_width:
+            # Extend inner check by 0.1m so outer corners at r=24 join Tier 1 seamlessly
+            if (ramp.inner_r - 0.1) <= s <= ramp.outer_r and perp <= ramp.half_width:
                 t = (ramp.outer_r - s) / (ramp.outer_r - ramp.inner_r)
                 return max(0.0, min(ramp.top_y, ramp.top_y * t))
         return 0.0
@@ -107,7 +108,6 @@ class MapDefinition:
         target_y = self.ground_height(x, z)
         if target_y is None:
             return allow_void
-        # Block climbing up sheer cliff faces (> 0.55m vertical step)
         return target_y <= old_y + 0.55
 
     def resolve_horizontal_move(
@@ -142,7 +142,7 @@ def _make_launch_pad_to(
 
 
 def build_night_map(night: int) -> MapDefinition:
-    """Build standardized map definition for Night 1, 2, or 3."""
+    """Build standardized map definition for Night 1, 2, or 3 (Contract v1.2 durations)."""
     if night == 1:
         mote_spawns = (
             tuple(_polar(0.0, 0.0, 12.0, i * 45.0) for i in range(8))
@@ -152,8 +152,8 @@ def build_night_map(night: int) -> MapDefinition:
         return MapDefinition(
             night=1,
             name="Đêm 1 — Đảo Bến",
-            intro_quote="Ông Đăng: \"Đảo Bến là cửa ngõ biển mây. Hãy thắp đủ 5 ngọn đèn trước khi sương đặc lại!\"",
-            duration_s=300.0,
+            intro_quote="Ông Đăng: \"Đèn thắp rồi vẫn cạn dầu! Hãy giữ ít nhất 3/5 Đèn Lồng sáng tới bình minh.\"",
+            duration_s=240.0,
             player_spawn=(0.0, 0.0, 0.0),
             lantern_spawns=(
                 ("L1", (0.0, 0.0, 25.0)),
@@ -188,8 +188,8 @@ def build_night_map(night: int) -> MapDefinition:
         return MapDefinition(
             night=2,
             name="Đêm 2 — Đảo Cau",
-            intro_quote="Ông Đăng: \"Cầu tre nối hai bờ Đảo Cau rất mảnh, coi chừng Gió Lạc rình cướp đom đóm và bục nhảy qua đảo!\"",
-            duration_s=330.0,
+            intro_quote="Ông Đăng: \"Giữ sáng ít nhất 4/6 đèn trên hai bờ Đảo Cau tới bình minh — coi chừng Bóng Mực hút dầu và Gió Lạc!\"",
+            duration_s=270.0,
             player_spawn=(0.0, 0.0, 0.0),
             lantern_spawns=(
                 ("L1", (0.0, 0.0, 20.0)),
@@ -234,8 +234,8 @@ def build_night_map(night: int) -> MapDefinition:
         return MapDefinition(
             night=3,
             name="Đêm 3 — Đảo Chuông",
-            intro_quote="Ông Đăng: \"Đêm cuối trên Đảo Chuông ba tầng! Hãy leo dốc, tận dụng bục nhảy và Bùa Gió trước cơn cuồng phong.\"",
-            duration_s=360.0,
+            intro_quote="Ông Đăng: \"Đêm cuối 5 phút trên Đảo Chuông! Hãy châm dầu và giữ sáng tối thiểu 5/7 đèn tới lúc bình minh ló dạng.\"",
+            duration_s=300.0,
             player_spawn=(0.0, 0.0, -15.0),
             lantern_spawns=(
                 ("L1", (0.0, 6.0, 6.0)),

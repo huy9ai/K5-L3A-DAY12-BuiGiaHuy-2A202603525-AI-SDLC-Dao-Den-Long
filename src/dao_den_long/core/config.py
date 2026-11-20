@@ -1,4 +1,4 @@
-"""Single-source-of-truth configuration loader synced with game.contract.json (v1.1)."""
+"""Single-source-of-truth configuration loader synced with game.contract.json (v1.2)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ DEFAULT_CONTRACT_PATH = ROOT_DIR / "game.contract.json"
 TICK_RATE = 60
 DT = 1.0 / TICK_RATE
 
-# Standardized Ticket-02 gameplay constants (60 Hz, meters, seconds, Y up)
+# Standardized Ticket-02 & Ticket-03 gameplay constants (60 Hz, meters, seconds, Y up)
 JUMP_VELOCITY = 7.0
 GRAVITY = 20.0
 FALL_Y_THRESHOLD = -10.0
@@ -26,8 +26,15 @@ SHADE_WANDER_SPEED = 2.0
 SHADE_SPAWN_TICKS = 30
 SHADE_RECOIL_DIST = 2.0
 SHADE_RECOIL_TICKS = 60
+SHADE_DRAIN_RADIUS = 2.0
+SHADE_DRAIN_DETECT_PLAYER_RADIUS = 6.0
+FUEL_DRAIN_EVENT_INTERVAL_TICKS = 60
 SAFE_PUSHOUT_MAX_TICKS = 30
-VALID_SHADE_STATES = ("spawning", "wander", "chase", "recoil", "stunned")
+VALID_SHADE_STATES = ("spawning", "wander", "chase", "recoil", "stunned", "drain")
+
+SCORE_RELIGHT = 40
+SCORE_STUN_DRAINING_TOTAL = 15
+SCORE_DAWN_LANTERN_BASE = 50
 
 PULSE_CENTER_Y_OFFSET = 0.8
 PULSE_PUSH_TICKS = 15
@@ -62,7 +69,7 @@ WIND_PUSH_SPEED = 2.0
 
 @dataclass(frozen=True)
 class ScoreTuning:
-    """Scoring weights per Test Contract v1.1."""
+    """Scoring weights per Test Contract v1.2."""
 
     per_mote: int
     per_lantern: int
@@ -73,14 +80,16 @@ class ScoreTuning:
 
 @dataclass(frozen=True)
 class TuningConfig:
-    """Gameplay tuning parameters synced with game.contract.json."""
+    """Gameplay tuning parameters synced with game.contract.json (v1.2)."""
 
     player_speed: float
     dash_speed: float
     dash_duration_s: float
     dash_cooldown_s: float
     carry_capacity: int
+    capacity_max: int
     lantern_cost: int
+    relight_cost: int
     lantern_count_night1: int
     pickup_radius: float
     interact_radius: float
@@ -99,6 +108,12 @@ class TuningConfig:
     shade_speed: float
     shade_hit_radius: float
     fall_enabled: bool
+    fuel_max: float
+    fuel_decay_per_s: float
+    fuel_per_mote: float
+    win_ratio: float
+    drain_per_s: float
+    low_fuel_threshold: float
     score: ScoreTuning
 
 
@@ -119,7 +134,9 @@ def load_tuning(contract_path: Path | None = None) -> TuningConfig:
         dash_duration_s=float(t["dash_duration_s"]),
         dash_cooldown_s=float(t["dash_cooldown_s"]),
         carry_capacity=int(t["carry_capacity"]),
+        capacity_max=int(t["capacity_max"]),
         lantern_cost=int(t["lantern_cost"]),
+        relight_cost=int(t["relight_cost"]),
         lantern_count_night1=int(t["lantern_count_night1"]),
         pickup_radius=float(t["pickup_radius"]),
         interact_radius=float(t["interact_radius"]),
@@ -138,6 +155,12 @@ def load_tuning(contract_path: Path | None = None) -> TuningConfig:
         shade_speed=float(t["shade_speed"]),
         shade_hit_radius=float(t["shade_hit_radius"]),
         fall_enabled=bool(t["fall_enabled"]),
+        fuel_max=float(t["fuel_max"]),
+        fuel_decay_per_s=float(t["fuel_decay_per_s"]),
+        fuel_per_mote=float(t["fuel_per_mote"]),
+        win_ratio=float(t["win_ratio"]),
+        drain_per_s=float(t["drain_per_s"]),
+        low_fuel_threshold=float(t["low_fuel_threshold"]),
         score=ScoreTuning(
             per_mote=int(s["per_mote"]),
             per_lantern=int(s["per_lantern"]),
