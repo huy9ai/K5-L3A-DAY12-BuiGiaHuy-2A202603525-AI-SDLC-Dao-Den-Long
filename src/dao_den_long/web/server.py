@@ -1,4 +1,4 @@
-"""Zero-dependency HTTP server serving the 3D WebGL2 game and 3-Night campaign API (v1.2)."""
+"""Zero-dependency HTTP server serving the 3D WebGL2 game, Leaderboard, and Benchmark API (v1.3)."""
 
 from __future__ import annotations
 
@@ -9,11 +9,17 @@ import json
 import math
 from pathlib import Path
 import threading
+import time
 from typing import Any
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 from dao_den_long.core.config import load_tuning
 from dao_den_long.core.engine import GameSimulation, InputFrame
+from dao_den_long.ops import (
+    LeaderboardStore,
+    build_benchmark_simulation,
+    step_benchmark_wander,
+)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -22,22 +28,37 @@ CONTENT_TYPES = {
     ".css": "text/css; charset=utf-8",
     ".js": "application/javascript; charset=utf-8",
     ".json": "application/json; charset=utf-8",
+    ".png": "image/png",
+    ".mp4": "video/mp4",
 }
 
 
 class SimulationSession:
-    """Thread-safe 3-Night campaign session driving the 3D browser client."""
+    """Thread-safe 3-Night campaign, leaderboard, and benchmark session driving the 3D browser client."""
 
-    def __init__(self, seed: int = 42, night: int = 1) -> None:
+    def __init__(self, seed: int = 42, night: int = 1, leaderboard_path: Path | None = None) -> None:
         self._lock = threading.Lock()
+        self._t_created = time.perf_counter()
         self._seed = seed
         self._night = night
         self._campaign_score = 0
+        self._nights_won = 0
         self._night_banked = False
         self._tuning = load_tuning()
         self._sim = GameSimulation(seed=self._seed, night=self._night, tuning=self._tuning)
+        self.leaderboard = LeaderboardStore(path=leaderboard_path)
+        self.bench_client_connected = False
+        self.bench_first_frame_ms: float | None = None
+        self.bench_result: dict[str, Any] | None = None
+
+    def _bank_if_won(self) -> None:
+        if self._sim.state == "won" and not self._night_banked:
+            self._campaign_score += self._sim.score
+            self._nights_won = min(3, self._nights_won + 1)
+            self._night_banked = True
 
     def _payload(self, events: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+        self._bank_if_won()
         snap = self._sim.snapshot()
         win_needed = math.ceil(self._tuning.win_ratio * len(self._sim.lanterns) - 1e-9)
         return {
@@ -47,8 +68,9 @@ class SimulationSession:
                 "map_name": self._sim.map_def.name,
                 "intro_quote": self._sim.map_def.intro_quote,
                 "win_needed": win_needed,
-                "campaign_score": self._campaign_score
-                + (snap["score"] if self._sim.state == "won" and not self._night_banked else 0),
+                "campaign_score": self._campaign_score,
+                "nights_won": self._nights_won,
+                "seed": self._seed,
                 "wind_warning": self._sim.wind_warning,
                 "facing_yaw_deg": round(self._sim.player.facing_yaw_deg, 2),
                 "shades_target": {s.id: s.target_lantern_id for s in self._sim.shades if s.target_lantern_id},
@@ -76,6 +98,23 @@ class SimulationSession:
 
     def state(self) -> dict[str, Any]:
         with self._lock:
+            return self._payload([])
+
+    def init_benchmark(self, seed: int = 42) -> dict[str, Any]:
+        with self._lock:
+            self.bench_client_connected = True
+            self._seed = seed
+            self._night = 1
+            self._tuning = load_tuning()
+            self._sim = build_benchmark_simulation(seed=seed)
+            if self.bench_first_frame_ms is None:
+                self.bench_first_frame_ms = (time.perf_counter() - self._t_created) * 1000.0
+            return self._payload([])
+
+    def step_benchmark(self, steps: int = 1) -> dict[str, Any]:
+        with self._lock:
+            for _ in range(max(1, min(8, steps))):
+                step_benchmark_wander(self._sim)
             return self._payload([])
 
     def step_ticks(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -123,6 +162,7 @@ class SimulationSession:
         with self._lock:
             if reset_campaign:
                 self._campaign_score = 0
+                self._nights_won = 0
             if night in (1, 2, 3):
                 self._night = int(night)
             if seed is not None:
@@ -134,9 +174,7 @@ class SimulationSession:
 
     def next_night(self) -> dict[str, Any]:
         with self._lock:
-            if self._sim.state == "won" and not self._night_banked:
-                self._campaign_score += self._sim.score
-                self._night_banked = True
+            self._bank_if_won()
             self._night = min(3, self._night + 1)
             self._night_banked = False
             self._tuning = load_tuning()
@@ -156,16 +194,27 @@ def dispatch_request(
     body: bytes = b"",
 ) -> tuple[HTTPStatus, str, bytes]:
     """Pure HTTP router returning (status, content_type, body_bytes)."""
-    route = urlparse(target_path).path
+    parsed_url = urlparse(target_path)
+    route = parsed_url.path
+    query = parse_qs(parsed_url.query)
 
     if method == "GET":
         if route == "/health":
             return _json_response(
                 HTTPStatus.OK,
-                {"status": "ok", "phase": "phase-3", "contract_version": "1.2"},
+                {"status": "ok", "phase": "phase-4", "contract_version": "1.3"},
             )
         if route == "/api/state":
             return _json_response(HTTPStatus.OK, session.state())
+        if route == "/api/leaderboard":
+            return _json_response(HTTPStatus.OK, {"entries": session.leaderboard.load_entries()})
+        if route == "/api/bench_init":
+            raw_seed = query.get("seed", ["42"])[0]
+            try:
+                seed = int(raw_seed)
+            except ValueError:
+                seed = 42
+            return _json_response(HTTPStatus.OK, session.init_benchmark(seed=seed))
         if route == "/":
             index_file = STATIC_DIR / "index.html"
             if index_file.is_file():
@@ -194,6 +243,31 @@ def dispatch_request(
 
         if route == "/api/tick":
             return _json_response(HTTPStatus.OK, session.step_ticks(parsed_body))
+        if route == "/api/bench_tick":
+            steps = int(parsed_body.get("steps", 1)) if isinstance(parsed_body.get("steps"), (int, float)) else 1
+            return _json_response(HTTPStatus.OK, session.step_benchmark(steps=steps))
+        if route == "/api/bench_report":
+            if session.bench_first_frame_ms is not None and "load_ms" not in parsed_body:
+                parsed_body["load_ms"] = session.bench_first_frame_ms
+            session.bench_result = parsed_body
+            return _json_response(HTTPStatus.OK, {"status": "recorded"})
+        if route == "/api/leaderboard":
+            name = parsed_body.get("name")
+            score = parsed_body.get("score", session._campaign_score)
+            nights_won = parsed_body.get("nights_won", session._nights_won)
+            seed = parsed_body.get("seed", session._seed)
+            achieved_at = parsed_body.get("achieved_at")
+            try:
+                entries = session.leaderboard.add_entry(
+                    name=name,
+                    score=int(score),
+                    nights_won=int(nights_won),
+                    seed=int(seed),
+                    achieved_at=str(achieved_at) if achieved_at else None,
+                )
+            except (ValueError, TypeError) as exc:
+                return _json_response(HTTPStatus.BAD_REQUEST, {"error": str(exc)})
+            return _json_response(HTTPStatus.OK, {"entries": entries})
         if route == "/api/reset":
             raw_night = parsed_body.get("night")
             raw_seed = parsed_body.get("seed")
@@ -236,7 +310,7 @@ class _LanternRequestHandler(BaseHTTPRequestHandler):
         if method == "POST":
             length = int(self.headers.get("Content-Length", "0") or 0)
             if length > 0:
-                req_body = self.rfile.read(min(length, 65536))
+                req_body = self.rfile.read(min(length, 524288))
 
         status, content_type, resp_body = dispatch_request(
             self.server.session, method, self.path, req_body
@@ -262,7 +336,7 @@ def create_server(
     *,
     seed: int = 42,
     quiet: bool = False,
-) -> tuple[ThreadingHTTPServer, int]:
+) -> tuple[_LanternHTTPServer, int]:
     session = SimulationSession(seed=seed)
     server = _LanternHTTPServer((host, port), _LanternRequestHandler, session, quiet)
     return server, int(server.server_address[1])

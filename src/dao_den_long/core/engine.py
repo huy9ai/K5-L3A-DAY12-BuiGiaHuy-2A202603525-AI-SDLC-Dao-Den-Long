@@ -365,6 +365,7 @@ class GameSimulation:
                             if l.lit
                             and l.fuel_60 < self._low_fuel_60
                             and _xz_dist(sx, sz, l.x, l.z) <= SHADE_DRAIN_RADIUS + 1e-9
+                            and abs(sy - l.y) <= ENTITY_MAX_HEIGHT_DIFF + 1e-9
                         ),
                         key=lambda it: (it[0], it[1]),
                     )
@@ -676,6 +677,7 @@ class GameSimulation:
                     and tl.lit
                     and tl.fuel_60 < self._low_fuel_60
                     and _xz_dist(s.x, s.z, tl.x, tl.z) <= SHADE_DRAIN_RADIUS + 1e-9
+                    and abs(s.y - tl.y) <= ENTITY_MAX_HEIGHT_DIFF + 1e-9
                 ):
                     draining_by_lantern.setdefault(s.target_lantern_id, []).append(s)
 
@@ -1056,6 +1058,7 @@ class GameSimulation:
                         or not target_l.lit
                         or target_l.fuel_60 >= self._low_fuel_60
                         or _xz_dist(s.x, s.z, target_l.x, target_l.z) > SHADE_DRAIN_RADIUS + 1e-9
+                        or abs(s.y - target_l.y) > ENTITY_MAX_HEIGHT_DIFF + 1e-9
                     ):
                         s.state = "wander"
                         s.target_lantern_id = None
@@ -1077,13 +1080,16 @@ class GameSimulation:
                         weak.sort(key=lambda it: (it[0], it[1]))
                         wdist, wlid, wl = weak[0]
                         s.target_lantern_id = wlid
-                        if wdist <= SHADE_DRAIN_RADIUS + 1e-9:
+                        if wdist <= SHADE_DRAIN_RADIUS + 1e-9 and abs(s.y - wl.y) <= ENTITY_MAX_HEIGHT_DIFF + 1e-9:
                             s.state = "drain"
                             s.drain_ticks = 0
                         else:
                             step_m = min(wdist, SHADE_WANDER_SPEED * DT)
                             self._move_shade_step(s, ((wl.x - s.x) / wdist) * step_m, ((wl.z - s.z) / wdist) * step_m)
-                            if _xz_dist(s.x, s.z, wl.x, wl.z) <= SHADE_DRAIN_RADIUS + 1e-9:
+                            if (
+                                _xz_dist(s.x, s.z, wl.x, wl.z) <= SHADE_DRAIN_RADIUS + 1e-9
+                                and abs(s.y - wl.y) <= ENTITY_MAX_HEIGHT_DIFF + 1e-9
+                            ):
                                 s.state = "drain"
                                 s.drain_ticks = 0
                         continue
