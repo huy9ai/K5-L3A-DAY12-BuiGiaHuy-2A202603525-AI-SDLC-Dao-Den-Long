@@ -1,4 +1,4 @@
-"""Headless deterministic runner (CP0 scaffold before PRD-0 Test Contract)."""
+"""Headless CLI runner conforming to Test Contract v1.0."""
 
 from __future__ import annotations
 
@@ -8,50 +8,142 @@ from pathlib import Path
 import sys
 from typing import Any, Sequence
 
-from dao_den_long.core.engine import HelloSimulation, SimConfig
+from dao_den_long.core.config import load_tuning
+from dao_den_long.core.engine import InputFrame, Night1Simulation
+from dao_den_long.headless.validation import (
+    ContractInputError,
+    load_and_validate_inputs,
+    load_and_validate_scenario,
+)
 
 
-def run_headless(seed: int = 42, ticks: int = 20) -> dict[str, Any]:
-    """Run deterministic simulation headlessly for the requested tick count."""
+def run_headless(
+    *,
+    seed: int,
+    night: int,
+    ticks: int,
+    snapshot_every: int = 10,
+    scenario: dict[str, Any] | None = None,
+    frames_by_tick: dict[int, dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Run deterministic Night simulation and return JSONL records."""
+    if night != 1:
+        raise ContractInputError(f"Unsupported --night {night}; Phase 1 supports --night 1 only")
     if ticks < 0:
-        raise ValueError("ticks must be non-negative")
-    sim = HelloSimulation(SimConfig(seed=seed))
-    for _ in range(ticks):
-        sim.step()
-    return sim.snapshot()
+        raise ContractInputError("--ticks must be >= 0")
+    if snapshot_every < 1:
+        raise ContractInputError("--snapshot-every must be >= 1")
 
+    tuning = load_tuning()
+    sim = Night1Simulation(seed=seed, tuning=tuning, scenario=scenario)
+    frames = frames_by_tick or {}
 
-def _write_stdout_utf8(text: str) -> None:
-    if hasattr(sys.stdout, "buffer"):
-        sys.stdout.buffer.write(text.encode("utf-8"))
-        sys.stdout.buffer.flush()
-    else:
-        sys.stdout.write(text)
-        sys.stdout.flush()
+    records: list[dict[str, Any]] = [sim.snapshot()]
+    held = {
+        "move": (0.0, 0.0),
+        "cam_yaw_deg": 0.0,
+        "jump": False,
+        "interact": False,
+        "pulse": False,
+        "dash": False,
+    }
+
+    for k in range(ticks):
+        if k in frames:
+            frame = frames[k]
+            if "move" in frame:
+                held["move"] = (float(frame["move"][0]), float(frame["move"][1]))
+            if "cam_yaw_deg" in frame:
+                held["cam_yaw_deg"] = float(frame["cam_yaw_deg"])
+            for btn in ("jump", "interact", "pulse", "dash"):
+                if btn in frame:
+                    held[btn] = bool(frame[btn])
+
+        inp = InputFrame(
+            move=held["move"],
+            cam_yaw_deg=held["cam_yaw_deg"],
+            jump=held["jump"],
+            interact=held["interact"],
+            pulse=held["pulse"],
+            dash=held["dash"],
+        )
+        events = sim.step(inp)
+        records.extend(events)
+
+        if sim.state != "playing" or (sim.tick % snapshot_every == 0):
+            records.append(sim.snapshot())
+        if sim.state != "playing":
+            break
+
+    records.append(sim.end_record())
+    return records
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entrypoint for headless mode."""
+    """CLI entrypoint matching Test Contract v1.0 section B."""
     parser = argparse.ArgumentParser(
         prog="run.py headless",
-        description="Run Dao Den Long simulation in deterministic headless mode.",
+        description="Run Dao Den Long in deterministic headless mode (Test Contract v1.0).",
     )
-    parser.add_argument("--seed", type=int, default=42, help="PRNG seed (default: 42)")
-    parser.add_argument("--ticks", type=int, default=20, help="Number of ticks to run (default: 20)")
-    parser.add_argument("--output", type=Path, default=None, help="Optional output JSON file path")
+    parser.add_argument("--seed", type=int, required=True, help="PRNG seed")
+    parser.add_argument("--night", type=int, required=True, help="Night number (1)")
+    parser.add_argument("--scenario", type=Path, default=None, help="Optional scenario JSON path")
+    parser.add_argument("--inputs", type=Path, default=None, help="Optional inputs JSON path")
+    parser.add_argument("--ticks", type=int, required=True, help="Max ticks to simulate")
+    parser.add_argument("--out", type=Path, required=True, help="Output JSONL file path")
+    parser.add_argument(
+        "--snapshot-every",
+        type=int,
+        default=10,
+        help="Emit snapshot every N ticks (default: 10)",
+    )
+
     parsed = parser.parse_args(list(argv) if argv is not None else None)
 
+    if parsed.night != 1:
+        print(f"Error: unsupported --night {parsed.night} (expected 1)", file=sys.stderr)
+        return 2
     if parsed.ticks < 0:
-        parser.error("--ticks must be >= 0")
+        print("Error: --ticks must be >= 0", file=sys.stderr)
+        return 2
+    if parsed.snapshot_every < 1:
+        print("Error: --snapshot-every must be >= 1", file=sys.stderr)
+        return 2
 
-    result = run_headless(seed=parsed.seed, ticks=parsed.ticks)
-    payload = json.dumps(result, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    try:
+        tuning = load_tuning()
+        scenario_data = (
+            load_and_validate_scenario(parsed.scenario, lantern_count=tuning.lantern_count_night1)
+            if parsed.scenario is not None
+            else None
+        )
+        frames_by_tick = (
+            load_and_validate_inputs(parsed.inputs)
+            if parsed.inputs is not None
+            else None
+        )
+        records = run_headless(
+            seed=parsed.seed,
+            night=parsed.night,
+            ticks=parsed.ticks,
+            snapshot_every=parsed.snapshot_every,
+            scenario=scenario_data,
+            frames_by_tick=frames_by_tick,
+        )
+    except ContractInputError as exc:
+        print(f"Contract validation error: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # pragma: no cover - defensive runtime failure path
+        print(f"Headless runtime error: {exc}", file=sys.stderr)
+        return 1
 
-    if parsed.output is not None:
-        parsed.output.parent.mkdir(parents=True, exist_ok=True)
-        parsed.output.write_text(payload, encoding="utf-8", newline="\n")
-    else:
-        _write_stdout_utf8(payload)
+    jsonl = "\n".join(json.dumps(rec, ensure_ascii=False, separators=(",", ":")) for rec in records) + "\n"
+    try:
+        parsed.out.parent.mkdir(parents=True, exist_ok=True)
+        parsed.out.write_text(jsonl, encoding="utf-8", newline="\n")
+    except OSError as exc:
+        print(f"Failed writing output '{parsed.out}': {exc}", file=sys.stderr)
+        return 1
 
     return 0
 
