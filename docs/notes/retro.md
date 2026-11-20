@@ -5,18 +5,20 @@
 ## 1. Đánh giá từng Phase
 
 ### Phase 1 (PRD-0 — Đêm 1: Đảo Bến + Test Contract v1.0)
-- **Yêu cầu đạt / chưa đạt:** Đạt toàn bộ lõi headless & tính năng Phase 1; tuy nhiên khi người dùng tự chơi bản 3D phát hiện lỗi đảo ngược trục `x_cam`/`y_cam` trong `mat4LookAt` khiến bản đồ bị lật ngược và bấm `D` đi sang trái.
-- **Điều cần chỉnh:** Đã sửa triệt để ngay đầu Phase 2 và thêm test kiểm tra ma trận view.
+- **Yêu cầu đạt / chưa đạt:** Đạt toàn bộ lõi headless & tính năng Phase 1; tuy nhiên khi chơi bản 3D phát hiện lỗi đảo trục trong `mat4LookAt` khiến bản đồ bị lật ngược và bấm `D` đi sang trái.
+- **Điều cần chỉnh:** Đã sửa triệt để ở Phase 2 và khóa bằng regression test.
 
 ### Phase 2 (TICKET-02 — Ba hòn đảo + Test Contract v1.1)
-- **Yêu cầu đạt / chưa đạt:**
-  - **ĐẠT:** Chuẩn hóa toàn bộ hằng số & bảng điểm vào `game.contract.json` (`1.1`); cài đặt đủ 3 bản đồ chuẩn (`Đảo Bến`, `Đảo Cau` + cầu tre + 2 bục nhảy, `Đảo Chuông` 3 tầng + 2 dốc + bục nhảy + tháp chuông + gió mạnh); cài đặt đúng thứ tự 12 bước trong tick; đầy đủ Dash, Rơi (`Y < -10`), 5 trạng thái Bóng Mực (`spawning/wander/chase/recoil/stunned`), đẩy `safe_radius` <= 30 tick, Gió Lạc, Bùa Gió, Tạm dừng (`pause`), sửa lỗi lật camera `mat4LookAt`, giao diện 3 Đêm (Menu, Intro Ông Đăng, Pause, Cài đặt lưu `localStorage`, HUD 10 ô, mũi tên ngoài màn hình, 11 SFX + nhạc đêm).
-  - **Hiệu năng:** Mô phỏng headless 21.600 tick (Đêm 3) hoàn tất dưới ngưỡng `30s` (xem số đo thật trong `docs/proof/phase-2/verify-output.txt`).
-  - **LƯU Ý:** Phần trực quan 3D và FPS thực tế `>= 30 FPS` ở `1280×720` trên trình duyệt chưa đo tự động qua Chrome vì thiếu `chrome_devtools` MCP; bộ đếm FPS được tích hợp sẵn trên HUD góc trên phải để học viên kiểm chứng trực tiếp khi chạy `python run.py`.
-- **Hồi quy Phase 1:** Toàn bộ kiểm thử hồi quy Đêm 1 đã cập nhật theo số chuẩn Phần 1 và đều PASS.
-- **Điều cần chỉnh ở phase sau:** Giữ thiết kế tách lớp `maps.py` <-> `engine.py` <-> `web/` để sẵn sàng đón các thay đổi luật ở `Ticket-03` (Phase 3 chỉ có 30 phút!).
+- **Yêu cầu đạt / chưa đạt:** Đạt toàn bộ 3 bản đồ chuẩn, 12 bước tick, Lướt, Rơi, 5 trạng thái Bóng Mực, Gió Lạc, Bùa Gió, Tạm dừng, Gió Đêm 3, sửa camera `mat4LookAt`, giao diện 3 Đêm + 11 SFX và benchmark 21.600 tick `1.220s <= 30s`.
+- **Điều cần chỉnh:** Giữ ranh giới sạch giữa `maps.py`, `engine.py`, `headless/` và `web/` để đón Change Request ở Phase 3.
 
-### Phase 3 (Ticket-03) — *Chưa thực hiện*
+### Phase 3 (TICKET-03 — Change Request "Đèn cạn dầu" + Test Contract v1.2)
+- **Yêu cầu đạt / chưa đạt:**
+  - **ĐẠT:** Mô hình nhiên liệu nguyên `1/60` (`fuel_60` `0..6000`), hao dầu `1/s`, châm dầu `ceil((100-fuel)/10)`, tắt đèn `lantern_out` (`ever_lit`, thắp lại tốn `5`), Bóng Mực trạng thái `drain` (hút `5/s` cộng dồn, `fuel_drain` mỗi 60 tick, mất vùng an toàn khi `< 30` và giữ ở đúng `30.0`, đẩy ra mép `6 m` trong `<= 30` tick khi châm lên `>= 30`, thưởng `+15` khi Tỏa Sáng con đang `drain`), luật thắng Bình minh (`240/270/300 s`, bỏ `all_lit`, ngưỡng `3/5` - `4/6` - `5/7`, `no_flames` ưu tiên trước), sức chứa động `10..20`, bảng điểm mới, Chế độ mù màu (`#00B3FF`, `#FFFFFF` + `⚠`, đèn tắt xẹp 20% + vết rách, nhấp nháy 1 Hz + thanh dầu), nâng cấp thẩm mỹ Áo Dài + Nón Lá & ánh sáng điểm WebGL2.
+  - **DoD đầy đủ:** Có ADR-005 trong `docs/notes/decisions.md`, mục `Breaking Changes` trong `CHANGELOG.md`, cập nhật có lý do các test bị ảnh hưởng (không skip âm thầm), toàn bộ test không bị thay thế của Phase 1–2 tiếp tục PASS 100%, và review độc lập lưu tại `docs/proof/phase-3/review.md`.
+  - **LƯU Ý:** Kiểm chứng trực quan Áo Dài/Nón Lá, Chế độ mù màu và FPS trình duyệt tiếp tục cần học viên mở `http://127.0.0.1:8000` sau khi chạy `python run.py` do môi trường thiếu `chrome_devtools` MCP.
+- **Điều cần chỉnh ở phase sau:** Giữ toàn bộ test Contract v1.2 xanh để sẵn sàng đón **Phase 4 (Ticket-04)** và bước đóng gói `v1.0.0` (CP5).
+
 ### Phase 4 (Ticket-04) — *Chưa thực hiện*
 
 ---
