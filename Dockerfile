@@ -2,7 +2,7 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY pyproject.toml run.py ./
+COPY pyproject.toml run.py game.contract.json ./
 COPY src/ ./src/
 COPY tests/ ./tests/
 COPY scripts/ ./scripts/

@@ -11,6 +11,7 @@ import platform
 import re
 import subprocess
 import sys
+import tempfile
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 
@@ -23,6 +24,29 @@ SECRET_PATTERNS = (
 
 IGNORED_DIRS = {".git", "__pycache__", ".pytest_cache", ".venv", "venv", "node_modules"}
 
+REQUIRED_TUNING_KEYS = {
+    "player_speed",
+    "carry_capacity",
+    "lantern_cost",
+    "lantern_count_night1",
+    "pickup_radius",
+    "interact_radius",
+    "pulse_cost",
+    "pulse_radius",
+    "night1_duration_s",
+    "flames",
+    "invuln_s",
+    "hit_drop_ratio",
+    "pulse_stun_s",
+    "pulse_push_m",
+    "pulse_cooldown_s",
+    "safe_radius",
+    "shade_speed",
+    "shade_hit_radius",
+    "fall_enabled",
+    "score",
+}
+
 
 def _git_head_short() -> str:
     proc = subprocess.run(
@@ -33,6 +57,29 @@ def _git_head_short() -> str:
         check=False,
     )
     return proc.stdout.strip() if proc.returncode == 0 else "uncommitted"
+
+
+def _run_contract_check() -> tuple[bool, str]:
+    contract_path = ROOT_DIR / "game.contract.json"
+    if not contract_path.is_file():
+        return False, "Missing game.contract.json at repository root."
+    try:
+        data = json.loads(contract_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return False, f"Invalid game.contract.json: {exc}"
+
+    missing_top = {"contract_version", "team", "build_cmd", "run_cmd", "headless_cmd", "tuning"} - set(data)
+    if missing_top:
+        return False, f"game.contract.json missing top-level keys: {sorted(missing_top)}"
+    missing_tuning = REQUIRED_TUNING_KEYS - set(data["tuning"])
+    if missing_tuning:
+        return False, f"game.contract.json missing tuning keys: {sorted(missing_tuning)}"
+
+    return True, (
+        f"contract_version={data['contract_version']}, team={data['team']}, "
+        f"lanterns={data['tuning']['lantern_count_night1']}, "
+        f"headless_cmd='{data['headless_cmd']}'"
+    )
 
 
 def _run_unit_tests() -> tuple[bool, str]:
@@ -50,31 +97,55 @@ def _run_unit_tests() -> tuple[bool, str]:
 
 
 def _run_headless_determinism() -> tuple[bool, str]:
-    cmd = [sys.executable, "run.py", "headless", "--seed", "42", "--ticks", "30"]
-    run1 = subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, check=False)
-    run2 = subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, check=False)
+    scenarios_dir = ROOT_DIR / "tests" / "scenarios"
+    lines: list[str] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_dir = Path(tmp)
+        cases = [
+            (
+                "win_scenario",
+                [
+                    sys.executable, "run.py", "headless",
+                    "--seed", "42", "--night", "1",
+                    "--scenario", str(scenarios_dir / "win_scenario.json"),
+                    "--inputs", str(scenarios_dir / "win_inputs.json"),
+                    "--ticks", "600",
+                ],
+            ),
+            (
+                "default_night1",
+                [
+                    sys.executable, "run.py", "headless",
+                    "--seed", "777", "--night", "1",
+                    "--ticks", "300",
+                ],
+            ),
+        ]
 
-    if run1.returncode != 0 or run2.returncode != 0:
-        err = (run1.stderr + run2.stderr).decode("utf-8", errors="replace")
-        return False, f"Headless execution failed (codes {run1.returncode}, {run2.returncode}):\n{err}"
+        for label, base_cmd in cases:
+            out1 = tmp_dir / f"{label}_1.jsonl"
+            out2 = tmp_dir / f"{label}_2.jsonl"
+            r1 = subprocess.run([*base_cmd, "--out", str(out1)], cwd=ROOT_DIR, capture_output=True, check=False)
+            r2 = subprocess.run([*base_cmd, "--out", str(out2)], cwd=ROOT_DIR, capture_output=True, check=False)
+            if r1.returncode != 0 or r2.returncode != 0:
+                err = (r1.stderr + r2.stderr).decode("utf-8", errors="replace")
+                return False, f"{label} failed ({r1.returncode}, {r2.returncode}):\n{err}"
 
-    hash1 = hashlib.sha256(run1.stdout).hexdigest()
-    hash2 = hashlib.sha256(run2.stdout).hexdigest()
+            b1 = out1.read_bytes()
+            b2 = out2.read_bytes()
+            h1 = hashlib.sha256(b1).hexdigest()
+            h2 = hashlib.sha256(b2).hexdigest()
+            if b1 != b2:
+                return False, f"{label} nondeterministic: {h1} != {h2}"
 
-    try:
-        parsed = json.loads(run1.stdout.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        return False, f"Invalid UTF-8/JSON from headless stdout: {exc}"
+            records = [json.loads(line) for line in b1.decode("utf-8").splitlines() if line.strip()]
+            end_rec = records[-1]
+            lines.append(
+                f"[{label}] SHA-256={h1} | lines={len(records)} | "
+                f"end=(state={end_rec.get('state')}, ticks={end_rec.get('ticks')}, score={end_rec.get('score')})"
+            )
 
-    same = run1.stdout == run2.stdout and hash1 == hash2
-    summary = (
-        f"Command: {' '.join(cmd)}\n"
-        f"Run 1 SHA-256: {hash1}\n"
-        f"Run 2 SHA-256: {hash2}\n"
-        f"Byte-identical: {same}\n"
-        f"Sample snapshot keys: {sorted(parsed.keys())}, tick={parsed.get('tick')}"
-    )
-    return same, summary
+    return True, "\n".join(lines)
 
 
 def _collect_repo_files() -> list[Path]:
@@ -130,10 +201,10 @@ def _run_secret_scan() -> tuple[bool, str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, tests, determinism, and hygiene.")
+    parser = argparse.ArgumentParser(description="Verify Dao Den Long build, contract, tests, determinism, and hygiene.")
     parser.add_argument("--quick", action="store_true", help="Run fast gate checks (for pre-commit/hooks)")
     parser.add_argument("--ci", action="store_true", help="Run CI verification with environment metadata")
-    parser.add_argument("--phase", default="cp0", help="Phase name for proof directory (default: cp0)")
+    parser.add_argument("--phase", default="phase-1", help="Phase name for proof directory (default: phase-1)")
     parser.add_argument("--write-proof", action="store_true", help="Write raw output to docs/proof/<phase>/verify-output.txt")
     args = parser.parse_args(argv)
 
@@ -142,7 +213,8 @@ def main(argv: list[str] | None = None) -> int:
     git_rev = _git_head_short()
 
     checks = [
-        ("Unit & Smoke Tests (unittest)", _run_unit_tests),
+        ("Test Contract v1.0 Schema (game.contract.json)", _run_contract_check),
+        ("Unit & Contract Tests (unittest)", _run_unit_tests),
         ("Headless Determinism (SHA-256 x2)", _run_headless_determinism),
         ("Secret & Hygiene Scan", _run_secret_scan),
     ]
