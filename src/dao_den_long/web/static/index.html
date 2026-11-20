@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Đảo Đèn Lồng — CP0 Hello 3D</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <canvas id="scene-canvas" aria-label="Cảnh 3D Đảo Đèn Lồng"></canvas>
+
+  <aside class="hud" aria-live="polite">
+    <div class="badge">CP0 · Hello 3D + Core Đồng Bộ</div>
+    <h1>Đảo Đèn Lồng</h1>
+    <p class="subtitle">Kéo chuột để xoay góc nhìn · Nhấn Space hoặc nút bên dưới để thắp sáng đèn.</p>
+    <dl class="stats">
+      <div><dt>Tick</dt><dd id="stat-tick">0</dd></div>
+      <div><dt>Đom đóm</dt><dd id="stat-fireflies">0</dd></div>
+      <div><dt>Độ sáng đèn</dt><dd id="stat-glow">1.00</dd></div>
+      <div><dt>Renderer</dt><dd id="stat-renderer">WebGL2</dd></div>
+    </dl>
+    <div class="actions">
+      <button id="btn-pulse" type="button">Thắp nhịp đèn (Space)</button>
+      <button id="btn-reset" type="button" class="secondary">Đặt lại</button>
+    </div>
+  </aside>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
