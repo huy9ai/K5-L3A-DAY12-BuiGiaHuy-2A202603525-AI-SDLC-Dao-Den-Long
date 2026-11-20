@@ -1,0 +1,49 @@
+name: Verify Dao Den Long
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["phase-*", "v*"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run full verification gate
+        run: python3 scripts/verify.py --ci
+
+      - name: Verify headless CLI output
+        run: python3 run.py headless --seed 42 --ticks 20
+
+      - name: Live HTTP server smoke test
+        run: |
+          python3 -c '
+          import json, subprocess, sys, time, urllib.request
+          proc = subprocess.Popen([sys.executable, "run.py", "--host", "127.0.0.1", "--port", "8123"])
+          try:
+              for _ in range(25):
+                  try:
+                      with urllib.request.urlopen("http://127.0.0.1:8123/health", timeout=1) as resp:
+                          assert resp.status == 200
+                          data = json.loads(resp.read().decode("utf-8"))
+                          assert data["status"] == "ok", data
+                          print("Live HTTP /health OK:", data)
+                          break
+                  except Exception:
+                      time.sleep(0.2)
+              else:
+                  raise RuntimeError("HTTP server failed to respond on /health")
+          finally:
+              proc.terminate()
+              proc.wait(timeout=5)
+          '

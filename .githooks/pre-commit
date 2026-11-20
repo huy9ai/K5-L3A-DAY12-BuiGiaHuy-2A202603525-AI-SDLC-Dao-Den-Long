@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+set -eu
+
+# Reject staged .env or secret files
+staged_env=$(git diff --cached --name-only | grep -E '(^|/)\.env($|\.)' | grep -v '\.env\.example$' || true)
+if [ -n "$staged_env" ]; then
+    echo "ERROR: Refusing to commit secret env file:"
+    echo "$staged_env"
+    exit 1
+fi
+
+# Resolve Python interpreter safely (skip Windows Store python3 stub if broken)
+if command -v python3 >/dev/null 2>&1 && python3 --version >/dev/null 2>&1; then
+    PYTHON_BIN="python3"
+elif command -v python >/dev/null 2>&1 && python --version >/dev/null 2>&1; then
+    PYTHON_BIN="python"
+else
+    echo "ERROR: No working Python interpreter found in PATH."
+    exit 1
+fi
+
+echo "[pre-commit] Running quick verification gate with $PYTHON_BIN..."
+"$PYTHON_BIN" scripts/verify.py --quick
